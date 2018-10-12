@@ -1,0 +1,6 @@
+<launch>
+
+  <node pkg="vehicle" name="stereo_node" type="stereo" respawn="true"/>
+  <node pkg="vehicle" name="road_node" type="road.py" respawn="true"/>
+
+</launch>
