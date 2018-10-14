@@ -16,10 +16,10 @@ int main(int argc, char** argv) {
 
   ros::Rate loop_rate(5);
   while (nh.ok()) {
-    for (int i = 0; nh.ok() && i < 200; i++) {
+    for (int i = 5; nh.ok() && i <= 102; i++) {
       std::stringstream ssl, ssd;
-      ssl << DATA_DIR << "left/" << std::setfill('0') << std::setw(6) << i << "_10.png";
-      ssd << DATA_DIR << "disp/" << std::setfill('0') << std::setw(6) << i << "_10.png";
+      ssl << DATA_DIR << "left/" << std::setfill('0') << std::setw(10) << i << ".png";
+      ssd << DATA_DIR << "disp/" << std::setfill('0') << std::setw(10) << i << ".png";
 
       cv::Mat leftImage = cv::imread(ssl.str(), CV_LOAD_IMAGE_COLOR);
       cv::Mat dispImage = cv::imread(ssd.str(), CV_LOAD_IMAGE_GRAYSCALE);

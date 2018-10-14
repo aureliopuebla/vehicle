@@ -1,6 +1,7 @@
 <launch>
 
-  <node pkg="vehicle" name="stereo_node" type="stereo" respawn="true"/>
-  <node pkg="vehicle" name="road_node" type="road.py" respawn="true"/>
+  <node pkg="vehicle" type="stereo" name="stereo_node" respawn="true"/>
+  <node pkg="vehicle" type="road.py" name="road_node" respawn="true"/>
+  <node pkg="rqt_gui" type="rqt_gui" name="rqt_node" respawn="false"/>
 
 </launch>
