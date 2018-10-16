@@ -2,6 +2,7 @@
 
   <node pkg="vehicle" type="stereo" name="stereo_node" respawn="true"/>
   <node pkg="vehicle" type="road.py" name="road_node" respawn="true"/>
-  <node pkg="rqt_gui" type="rqt_gui" name="rqt_node" respawn="false"/>
+  <node pkg="rqt_gui" type="rqt_gui" name="rqt_node" respawn="false"
+        args="--perspective-file $(find vehicle)/launch/visualization.perspective"/>
 
 </launch>
