@@ -6,10 +6,15 @@ from cv_bridge import CvBridge
 
 import numpy as np
 
-HISTOGRAM_BINS = 1024
-BIN_SIZE = 65536 / HISTOGRAM_BINS
+MAX_DISPARITY = 16383
+HISTOGRAM_BINS = 256
+BIN_SIZE = (MAX_DISPARITY+1) / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 2
 bridge = CvBridge()
+
+def getHistogram(array):
+    return np.histogram(
+        array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
 
 def roadCallback(cameraImageMsg, dispImageMsg, VdispImagePub, roadImagePub):
     dispImage = bridge.imgmsg_to_cv2(
@@ -17,20 +22,16 @@ def roadCallback(cameraImageMsg, dispImageMsg, VdispImagePub, roadImagePub):
     cameraImage = bridge.imgmsg_to_cv2(
         cameraImageMsg, desired_encoding='passthrough')
         
-    UdispImage = np.apply_along_axis(
-        lambda c: np.histogram(c, bins=HISTOGRAM_BINS, range=(0, 65535))[0], 
-        0, 
-        dispImage)
+    UdispImage = np.apply_along_axis(getHistogram, 0, dispImage)
         
     rows, cols = dispImage.shape
     filterImage = UdispImage[
-        dispImage / BIN_SIZE, np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
+        np.minimum(HISTOGRAM_BINS-1, dispImage / BIN_SIZE), 
+        np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
     
-    VdispImage = 0 != np.apply_along_axis(
-        lambda r: np.histogram(r, bins=HISTOGRAM_BINS, range=(0, 65535))[0], 
-        1, 
-        dispImage * filterImage)
-    
+    VdispImage = np.apply_along_axis(getHistogram, 1, dispImage * filterImage)
+
+    # Show elements with values > 0.
     VdispImage = VdispImage.astype('uint16') * 65535
     filterImage = filterImage.astype('uint16') * 65535
     
