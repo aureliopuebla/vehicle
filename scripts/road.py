@@ -6,37 +6,55 @@ from cv_bridge import CvBridge
 
 import numpy as np
 
-HISTOGRAM_BINS = 50
+HISTOGRAM_BINS = 1024
+BIN_SIZE = 65536 / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 2
 bridge = CvBridge()
 
-def roadCallback(cameraImageMsg, dispImageMsg, roadImagePub):
+def roadCallback(
+    cameraImageMsg, dispImageMsg, UdispImagePub, VdispImagePub, roadImagePub):
+    
     dispImage = bridge.imgmsg_to_cv2(
         dispImageMsg, desired_encoding='passthrough')
     cameraImage = bridge.imgmsg_to_cv2(
         cameraImageMsg, desired_encoding='passthrough')
         
     UdispImage = np.apply_along_axis(
-        lambda e: np.histogram(e, bins=HISTOGRAM_BINS, range=(0, 255))[0], 
+        lambda c: np.histogram(c, bins=HISTOGRAM_BINS, range=(0, 65535))[0], 
         0, 
         dispImage)
-    roadImage = np.apply_along_axis(
-        lambda e: e, 
-        0, 
-        dispImage)
+    # UdispImage[0, :] = 0 # Clear unset Values
+        
+    rows, cols = dispImage.shape
+    filterImage = UdispImage[
+        dispImage / BIN_SIZE, np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
     
+    VdispImage = np.apply_along_axis(
+        lambda r: np.histogram(r, bins=HISTOGRAM_BINS, range=(0, 65535))[0], 
+        1, 
+        dispImage * filterImage)
+    
+    filterImage = filterImage.astype('uint16') * 65535
+    
+    UdispImagePub.publish(bridge.cv2_to_imgmsg(
+        UdispImage.astype('uint16'), encoding='16UC1'))
+    VdispImagePub.publish(bridge.cv2_to_imgmsg(
+        VdispImage.astype('uint16'), encoding='16UC1'))
     roadImagePub.publish(bridge.cv2_to_imgmsg(
-        cameraImage, encoding='bgr8'))
+        filterImage.astype('uint16'), encoding='16UC1'))
     
 def listener():
     rospy.init_node('road', anonymous=False)
-    
+
+    UdispImagePub = rospy.Publisher('/camera/Udisp', Image, queue_size=1)
+    VdispImagePub = rospy.Publisher('/camera/Vdisp', Image, queue_size=1)
     roadImagePub = rospy.Publisher('/camera/road', Image, queue_size=1)
     
     cameraImageSub = message_filters.Subscriber('/camera/image', Image)
     dispImageSub = message_filters.Subscriber('/camera/disp', Image)
-    ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 10)
-    ts.registerCallback(roadCallback, roadImagePub)
+    ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
+    ts.registerCallback(
+        roadCallback, UdispImagePub, VdispImagePub, roadImagePub)
     
     rospy.spin()
 

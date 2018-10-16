@@ -6,7 +6,11 @@
 #include <sstream>
 #include <iomanip>
 
-#define DATA_DIR "/home/aurelio/vehicle_ws/data/"
+#define DATA_DIR "/home/aurelio/KITTI Dataset/2011_09_26_drive_0091_sync/"
+#define LEFT_DIR "image_02/data/"
+#define DISP_DIR "proj_depth/groundtruth/image_02/"
+#define FIRST_IMAGE_IDX 5
+#define LAST_IMAGE_IDX 334
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "stereo");
@@ -16,18 +20,23 @@ int main(int argc, char** argv) {
 
   ros::Rate loop_rate(5);
   while (nh.ok()) {
-    for (int i = 5; nh.ok() && i <= 102; i++) {
+    for (int i = FIRST_IMAGE_IDX; nh.ok() && i <= LAST_IMAGE_IDX; i++) {
       std::stringstream ssl, ssd;
-      ssl << DATA_DIR << "left/" << std::setfill('0') << std::setw(10) << i << ".png";
-      ssd << DATA_DIR << "disp/" << std::setfill('0') << std::setw(10) << i << ".png";
+      ssl << DATA_DIR << LEFT_DIR; 
+      ssl << std::setfill('0') << std::setw(10) << i << ".png";
+      ssd << DATA_DIR << DISP_DIR; 
+      ssd << std::setfill('0') << std::setw(10) << i << ".png";
 
-      cv::Mat leftImage = cv::imread(ssl.str(), CV_LOAD_IMAGE_COLOR);
-      cv::Mat dispImage = cv::imread(ssd.str(), CV_LOAD_IMAGE_GRAYSCALE);
-      cv::waitKey(30);
+      cv::Mat leftImage = cv::imread(ssl.str(), cv::IMREAD_UNCHANGED);
+      cv::Mat depthImage = cv::imread(ssd.str(), cv::IMREAD_UNCHANGED);
+      cv::Mat invertedDepthImage = 65535 - depthImage;
+      cv::Mat dispImage = cv::Mat::zeros(depthImage.size(), CV_16UC1);
+      invertedDepthImage.copyTo(dispImage, depthImage != 0);
+
       sensor_msgs::ImagePtr leftMsg = cv_bridge::CvImage(
           std_msgs::Header(), "bgr8", leftImage).toImageMsg();
       sensor_msgs::ImagePtr dispMsg = cv_bridge::CvImage(
-          std_msgs::Header(), "mono8", dispImage).toImageMsg();
+          std_msgs::Header(), "16UC1", depthImage).toImageMsg();
     
       leftPub.publish(leftMsg);
       dispPub.publish(dispMsg);
