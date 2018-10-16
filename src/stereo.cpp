@@ -29,9 +29,6 @@ int main(int argc, char** argv) {
 
       cv::Mat leftImage = cv::imread(ssl.str(), cv::IMREAD_UNCHANGED);
       cv::Mat depthImage = cv::imread(ssd.str(), cv::IMREAD_UNCHANGED);
-      cv::Mat invertedDepthImage = 65535 - depthImage;
-      cv::Mat dispImage = cv::Mat::zeros(depthImage.size(), CV_16UC1);
-      invertedDepthImage.copyTo(dispImage, depthImage != 0);
 
       sensor_msgs::ImagePtr leftMsg = cv_bridge::CvImage(
           std_msgs::Header(), "bgr8", leftImage).toImageMsg();
