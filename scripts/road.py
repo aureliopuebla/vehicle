@@ -14,7 +14,19 @@ BIN_SIZE = (MAX_DISPARITY+1) / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 2
 RANSAC_TRIES = 1000
 RANSAC_EPSILON = 1
+ROAD_LINE_FIT_ALPHA = 0.26
 bridge = CvBridge()
+
+
+def getHistogram(array):
+    return np.histogram(array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
+
+
+def getUDisparityThressholdFilter(dispImage):
+    rows, cols = dispImage.shape
+    UdispImage = np.apply_along_axis(getHistogram, 0, dispImage)
+    return UdispImage[np.minimum(HISTOGRAM_BINS-1, dispImage / BIN_SIZE),
+                      np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
 
 
 def getRANSACFittedLine(VdispImage):
@@ -45,19 +57,17 @@ def getRANSACFittedLine(VdispImage):
             bestF = f
             bestM = m
             bestB = b
+
     return bestM, bestB
 
 
-def getHistogram(array):
-    return np.histogram(
-        array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
-
-
-def getRoadThressholdFilter(dispImage):
-    rows, cols = dispImage.shape
-    UdispImage = np.apply_along_axis(getHistogram, 0, dispImage)
-    return UdispImage[np.minimum(HISTOGRAM_BINS-1, dispImage / BIN_SIZE),
-                      np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
+def getRoadLineFitFilter(dispImage, m, b):
+    m /= BIN_SIZE  # Adjust m to original disparity values.
+    rows, _ = dispImage.shape
+    roadRowValues = np.fromfunction(
+        np.vectorize(lambda r, _: float(r - b) / m), (rows,1))
+    return np.abs(
+        dispImage - roadRowValues) <= (ROAD_LINE_FIT_ALPHA * roadRowValues)
 
 
 def roadCallback(cameraImageMsg, dispImageMsg, VdispImagePub, roadImagePub):
@@ -66,20 +76,26 @@ def roadCallback(cameraImageMsg, dispImageMsg, VdispImagePub, roadImagePub):
     cameraImage = bridge.imgmsg_to_cv2(
         cameraImageMsg, desired_encoding='passthrough')
 
-    filterImage = getRoadThressholdFilter(dispImage)
-    VdispImage = np.apply_along_axis(getHistogram, 1, dispImage * filterImage)
-    m, b = getRANSACFittedLine(VdispImage)
+    UDispFilter = getUDisparityThressholdFilter(dispImage)
+    VDispImage = np.apply_along_axis(getHistogram, 1, dispImage * UDispFilter)
+    m, b = getRANSACFittedLine(VDispImage)
+    roadFilter = getRoadLineFitFilter(dispImage, m, b)
+
 
     # Show elements with values > 0.
-    VdispImage = VdispImage.astype('uint8') * 255
-    colorVD = cv2.cvtColor(VdispImage, cv2.COLOR_GRAY2RGB)
-    cv2.line(colorVD, (0, int(b)), (100, int(100*m+b)), (255, 0, 0), 2)
-    filterImage = filterImage.astype('uint16') * 65535
+    VDispImage = VDispImage.astype('uint8') * 255
+    colorVD = cv2.cvtColor(VDispImage, cv2.COLOR_GRAY2RGB)
+    cv2.line(colorVD, (0, int(b)), (100, int(100*m+b)), (0, 0, 255), 2)
 
-    VdispImagePub.publish(bridge.cv2_to_imgmsg(
-        colorVD, encoding='bgr8'))
-    roadImagePub.publish(bridge.cv2_to_imgmsg(
-        filterImage.astype('uint16'), encoding='16UC1'))
+    roadImage = cameraImage * roadFilter[:, :, np.newaxis]
+    cv2.line(roadImage,
+             (0, int(b)),
+             (cameraImage.shape[1]-1, int(b)),
+             (0, 0, 255),
+             2)
+
+    VdispImagePub.publish(bridge.cv2_to_imgmsg(colorVD, encoding='bgr8'))
+    roadImagePub.publish(bridge.cv2_to_imgmsg(roadImage, encoding='bgr8'))
 
 
 def listener():
