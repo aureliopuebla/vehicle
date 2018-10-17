@@ -6,12 +6,14 @@ from cv_bridge import CvBridge
 
 import numpy as np
 import random
+import cv2
 
 MAX_DISPARITY = 16383
 HISTOGRAM_BINS = 256
 BIN_SIZE = (MAX_DISPARITY+1) / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 2
-RANSAC_TRIES = 100
+RANSAC_TRIES = 1000
+RANSAC_EPSILON = 1
 bridge = CvBridge()
 
 
@@ -19,7 +21,7 @@ def getRANSACFittedLine(VdispImage):
     rows, cols = VdispImage.shape
     cumSumArray = np.cumsum(VdispImage)
     N = cumSumArray[-1]
-    m = b = bestF = 0
+    bestM = bestB = bestF = 0
     for i in range(RANSAC_TRIES):
         idx1 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
         idx2 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
@@ -27,8 +29,23 @@ def getRANSACFittedLine(VdispImage):
         y1 = idx1 / cols
         x1 = idx1 - y1 * cols
         y2 = idx2 / cols
-        x2 = idx2 - y1 * cols
-        if x1 == y1: continue  # Do not consider vertical lines
+        x2 = idx2 - y2 * cols
+        if x1 == x2: continue  # Do not consider vertical lines
+        m = float(y2 - y1) / (x2 - x1)
+        b = y1 - m * x1
+
+        f = 0
+        for x in range(cols):
+            y = int(m * x + b)
+            if y < 0 or y >= rows: break
+            for yp in range(
+                max(0, y - RANSAC_EPSILON), min(rows, y + RANSAC_EPSILON)):
+                f += VdispImage[yp][x]
+        if f > bestF:
+            bestF = f
+            bestM = m
+            bestB = b
+    return bestM, bestB
 
 
 def getHistogram(array):
@@ -51,14 +68,16 @@ def roadCallback(cameraImageMsg, dispImageMsg, VdispImagePub, roadImagePub):
 
     filterImage = getRoadThressholdFilter(dispImage)
     VdispImage = np.apply_along_axis(getHistogram, 1, dispImage * filterImage)
-    getRANSACFittedLine(VdispImage)
+    m, b = getRANSACFittedLine(VdispImage)
 
     # Show elements with values > 0.
-    VdispImage = VdispImage.astype('uint16') * 65535
+    VdispImage = VdispImage.astype('uint8') * 255
+    colorVD = cv2.cvtColor(VdispImage, cv2.COLOR_GRAY2RGB)
+    cv2.line(colorVD, (0, int(b)), (100, int(100*m+b)), (255, 0, 0), 2)
     filterImage = filterImage.astype('uint16') * 65535
 
     VdispImagePub.publish(bridge.cv2_to_imgmsg(
-        VdispImage.astype('uint16'), encoding='16UC1'))
+        colorVD, encoding='bgr8'))
     roadImagePub.publish(bridge.cv2_to_imgmsg(
         filterImage.astype('uint16'), encoding='16UC1'))
 
