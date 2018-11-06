@@ -150,7 +150,7 @@
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
-                  "repr": "u'/camera/Vdisp_mouse_left'"
+                  "repr": "u'/camera/VdispWithFittedLine_mouse_left'"
                 },
                 "num_gridlines": {
                   "type": "repr",
@@ -170,7 +170,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "u'/camera/Vdisp'"
+                  "repr": "u'/camera/VdispWithFittedLine'"
                 },
                 "publish_click_location": {
                   "type": "repr",
@@ -217,7 +217,7 @@
                 },
                 "mouse_pub_topic": {
                   "type": "repr",
-                  "repr": "u'/camera/road_mouse_left'"
+                  "repr": "u'/camera/lineFittedRoad_mouse_left'"
                 },
                 "num_gridlines": {
                   "type": "repr",
@@ -237,7 +237,7 @@
                 },
                 "topic": {
                   "type": "repr",
-                  "repr": "u'/camera/road'"
+                  "repr": "u'/camera/lineFittedRoad'"
                 },
                 "publish_click_location": {
                   "type": "repr",
