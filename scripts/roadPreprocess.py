@@ -13,13 +13,16 @@ PUBLISH_UDISPARITY_ROAD_FILTER = True
 PUBLISH_VDISPARITY_WITH_FITTED_LINE = True
 PUBLISH_LINE_FITTED_ROAD = True
 
+# Note: Disparity values are uint16.
 MAX_DISPARITY = 16383
 HISTOGRAM_BINS = 256
 BIN_SIZE = (MAX_DISPARITY+1) / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 2
-RANSAC_TRIES = 1000
+RANSAC_TRIES = 2000
 RANSAC_EPSILON = 1
-ROAD_LINE_FIT_ALPHA = 0.26
+ROAD_LINE_FIT_ALPHA = 0.20
+VANISHING_POINT_CANDIDATES_BOX_HEIGHT = 40
+VANISHING_POINT_CANDIDATES_BOX_WIDTH = 300
 
 
 def getHistogram(array):
@@ -85,6 +88,19 @@ def getRoadLineFitFilter(dispImage, m, b):
         dispImage - roadRowValues) <= ROAD_LINE_FIT_ALPHA * roadRowValues
 
 
+def getVanishingPointCandidatesBox(lineFittedRoadFilter, b):
+    top = int(b - VANISHING_POINT_CANDIDATES_BOX_HEIGHT / 4)
+    bottom = int(b + VANISHING_POINT_CANDIDATES_BOX_HEIGHT * 3 / 4)
+    _, cols = lineFittedRoadFilter.shape
+    VPCandidateXCoordanates = (lineFittedRoadFilter[top:bottom+1] *
+                               np.mgrid[0:bottom-top+1, 0:cols][1])
+    Xmean = (np.sum(VPCandidateXCoordanates) /
+             np.count_nonzero(lineFittedRoadFilter[top:bottom+1]))
+    left = int(max(0, Xmean - VANISHING_POINT_CANDIDATES_BOX_WIDTH/2))
+    right = int(min(cols-1, Xmean + VANISHING_POINT_CANDIDATES_BOX_WIDTH/2))
+    return left, top, right, bottom
+
+
 def preprocessRoadCallback(cameraImageMsg,
                            dispImageMsg,
                            bridge,
@@ -100,7 +116,7 @@ def preprocessRoadCallback(cameraImageMsg,
       UdispRoadFilterImagePub: If set, it's the ROS Publisher that will contain
         the UDisparity Filter for visualization.
       VdispWithFittedLineImagePub: If set, it's the ROS Publisher that will
-        contain the VDisparity With the RANSAC ditted line for visualization.
+        contain the VDisparity With the RANSAC fitted line for visualization.
       lineFittedRoadImagePub: If set, it's the ROS Publisher that will contain
         the Line Fitted Road Image with horizon line for visualization.
     """
@@ -112,6 +128,9 @@ def preprocessRoadCallback(cameraImageMsg,
     UDispFilter = getUDisparityThressholdFilter(dispImage)
     VDispImage = np.apply_along_axis(getHistogram, 1, dispImage * UDispFilter)
     m, b = getRANSACFittedLine(VDispImage)
+    lineFittedRoadFilter = getRoadLineFitFilter(dispImage, m, b)
+    left, top, right, bottom = getVanishingPointCandidatesBox(
+        lineFittedRoadFilter, b)
 
     if UdispRoadFilterImagePub is not None:
         # Convert Binary Image to uint8.
@@ -132,13 +151,17 @@ def preprocessRoadCallback(cameraImageMsg,
             bridge.cv2_to_imgmsg(VdispWithFittedLine, encoding='bgr8'))
 
     if lineFittedRoadImagePub is not None:
-        lineFittedRoadFilter = getRoadLineFitFilter(dispImage, m, b)
         lineFittedRoad = cameraImage * lineFittedRoadFilter[:, :, np.newaxis]
         cv2.line(lineFittedRoad,
-                 (0, int(b)),
-                 (cameraImage.shape[1] - 1, int(b)),
-                 (0, 0, 255),
-                 2)
+                 pt1=(0, int(b)),
+                 pt2=(cameraImage.shape[1] - 1, int(b)),
+                 color=(0, 0, 255),
+                 thickness=2)
+        cv2.rectangle(lineFittedRoad,
+                      pt1=(left, top),
+                      pt2=(right, bottom),
+                      color=(255, 0, 0),
+                      thickness=2)
         lineFittedRoadImagePub.publish(
             bridge.cv2_to_imgmsg(lineFittedRoad, encoding='bgr8'))
 

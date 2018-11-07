@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iomanip>
 
-#define DATA_DIR "/home/aurelio/KITTI Dataset/2011_09_26_drive_0091_sync/"
+#define DATA_DIR "/home/aurelio/KITTI Dataset/2011_09_26_drive_0028_sync/"
 #define LEFT_DIR "image_02/data/"
 #define DISP_DIR "proj_depth/groundtruth/image_02/"
 #define FIRST_IMAGE_IDX 5
@@ -36,6 +36,13 @@ int main(int argc, char** argv) {
                     65535-1, // thresshold, eliminates invalid depths/disps.
                     0, 
                     cv::THRESH_TOZERO_INV);
+      // Extend sparse values to simulate the Multisense density.
+      //cv::Mat count = (dispImage != 0) / 255;
+      //count.convertTo(count, CV_16UC1);
+      //cv::boxFilter(count, count, -1 /*ddepth*/, cv::Size(3, 3),
+      //              cv::Point(-1,-1), false/*normalize*/);
+      //cv::blur(dispImage, dispImage, cv::Size(3, 3));
+      //dispImage = dispImage.mul(count);
 
       sensor_msgs::ImagePtr leftMsg = cv_bridge::CvImage(
           std_msgs::Header(), "bgr8", leftImage).toImageMsg();
