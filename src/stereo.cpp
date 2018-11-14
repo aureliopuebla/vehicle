@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iomanip>
 
-#define DATA_DIR "/home/aurelio/KITTI Dataset/2011_09_26_drive_0028_sync/"
+#define DATA_DIR "/home/aurelio/KITTI Dataset/2011_09_26_drive_0091_sync/"
 #define LEFT_DIR "image_02/data/"
 #define DISP_DIR "proj_depth/groundtruth/image_02/"
 #define FIRST_IMAGE_IDX 5

@@ -131,6 +131,7 @@ def preprocessRoadCallback(cameraImageMsg,
     lineFittedRoadFilter = getRoadLineFitFilter(dispImage, m, b)
     left, top, right, bottom = getVanishingPointCandidatesBox(
         lineFittedRoadFilter, b)
+    # https: // ieeexplore.ieee.org / document / 5957282
 
     if UdispRoadFilterImagePub is not None:
         # Convert Binary Image to uint8.
