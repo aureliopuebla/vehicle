@@ -1,0 +1,26 @@
+<annotation>
+	<folder>rezised_images</folder>
+	<filename>pavo_real1.jpg</filename>
+	<path>/home/emilio/projects/vehicle/trainning/rezised_images/pavo_real1.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1067</width>
+		<height>800</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>pavoreal</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>163</xmin>
+			<ymin>234</ymin>
+			<xmax>488</xmax>
+			<ymax>423</ymax>
+		</bndbox>
+	</object>
+</annotation>

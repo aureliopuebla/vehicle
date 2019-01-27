@@ -1,0 +1,26 @@
+<annotation>
+	<folder>rezised_images</folder>
+	<filename>Pavo-real-en-la-India-Pavo-real-en-la-selva---c-Feministjulie.jpg</filename>
+	<path>/home/emilio/projects/vehicle/trainning/rezised_images/Pavo-real-en-la-India-Pavo-real-en-la-selva---c-Feministjulie.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1422</width>
+		<height>800</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>pavoreal</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>552</xmin>
+			<ymin>376</ymin>
+			<xmax>738</xmax>
+			<ymax>582</ymax>
+		</bndbox>
+	</object>
+</annotation>

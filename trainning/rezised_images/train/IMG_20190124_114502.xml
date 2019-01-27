@@ -1,0 +1,26 @@
+<annotation>
+	<folder>rezised_images</folder>
+	<filename>IMG_20190124_114502.jpg</filename>
+	<path>/home/emilio/projects/vehicle/trainning/rezised_images/IMG_20190124_114502.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>800</width>
+		<height>1067</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>pavoreal</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>307</xmin>
+			<ymin>498</ymin>
+			<xmax>455</xmax>
+			<ymax>570</ymax>
+		</bndbox>
+	</object>
+</annotation>
