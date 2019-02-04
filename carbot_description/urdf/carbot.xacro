@@ -1,0 +1,246 @@
+<?xml version="1.0"?>
+<robot name="carbot" xmlns:xacro="http://wiki.ros.org/xacro">
+
+  <xacro:property name="car_length" value="4.0"/> 
+  <xacro:property name="car_width" value="1.5"/>
+  <xacro:property name="car_height" value="1.9"/>
+  <xacro:property name="wheel_width" value="0.15"/>
+  <xacro:property name="wheel_radius" value="0.28"/>
+
+  <xacro:property name="min_steer" value="-0.7"/>
+  <xacro:property name="max_steer" value="0.7"/>
+
+  <xacro:include filename="$(find multisense_description)/urdf/multisenseS21/importable.urdf.xacro"/>
+
+  <!-- Generic Classes -->
+  <xacro:macro name="block" params="name length width height mass r:=0.8 b:=0.8 g:=0.8">
+    <link name="${name}">
+       <visual>
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+        <geometry>
+          <box size="${length} ${width} ${height}"/>
+        </geometry>
+        <material name="${name}_gray">
+          <color rgba="${r} ${g} ${b} 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+        <geometry>
+          <box size="${length} ${width} ${height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <mass value="${mass}"/>
+        <inertia
+            ixx="${mass / 12.0 * (width * width + height * height)}" ixy="0.0" ixz="0.0"
+            iyy="${mass / 12.0 * (length * length + height * height)}" iyz="0.0"
+            izz="${mass / 12.0 * (length * length + width * width)}" />
+      </inertial>
+    </link>
+  </xacro:macro>
+
+  <!-- a wheel that rotates around the y axis, rolls forward toward the x axis -->
+  <!--origin xyz="${length/2} ${width/2} ${height/2}" /-->
+  <xacro:macro name="wheel" params="name width radius mass">
+    <link name="${name}">
+      <visual>
+        <origin xyz="0.0 0.0 0.0" rpy="${pi/2} 0.0 0.0" />
+        <geometry>
+          <cylinder length="${width}" radius="${radius}"/>
+        </geometry>
+        <material name="${name}_black">
+          <color rgba="0.2 0.2 0.2 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0.0 0.0 0.0" rpy="${pi/2} 0.0 0.0" />
+        <geometry>
+          <cylinder length="${width}" radius="${radius}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0" />
+        <mass value="${mass}"/>
+        <inertia
+            ixx="${mass / 12.0 * (3 * radius * radius + width * width)}" ixy="0.0" ixz="0.0"
+            iyy="${mass / 12.0 * (3 * radius * radius + width * width)}" iyz="0.0"
+            izz="${mass / 2.0 * (radius * radius)}"/>
+      </inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="generic_wheel" params="name parent radius width">
+
+    <xacro:wheel name="wheel_${name}" width="${wheel_width}" radius="${wheel_radius}" mass="0.2"/>
+    <joint name="wheel_${name}_axle" type="continuous">
+      <parent link="${parent}"/>
+      <child link="wheel_${name}"/>
+      <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+      <axis xyz="0.0 1.0 0.0"/>
+      <limit effort="100.0" velocity="0.5"/>
+    </joint>
+
+    <!-- indicator of the wheel's spin status -->
+    <xacro:block name="wheel_${name}_hubcap" length="${1.6 * wheel_radius}"
+        width="${1.1 * wheel_width}" height="${0.2 * wheel_width}"  mass="0.1"
+        r="0.95" g="0.95" b="0.95"/>
+    <joint name="wheel_${name}_hubcap_joint" type="fixed">
+      <parent link="wheel_${name}"/>
+      <child link="wheel_${name}_hubcap"/>
+      <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    </joint>
+
+    <transmission name="${name}_tran">
+      <type>transmission_interface/SimpleTransmission</type>
+      <joint name="wheel_${name}_axle">
+        <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      </joint>
+      <actuator name="${name}_motor">
+        <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+        <mechanicalReduction>1</mechanicalReduction>
+      </actuator>
+    </transmission>
+
+    <gazebo reference="wheel_${name}">
+      <mu1>800</mu1>
+      <mu2>100</mu2>
+      <kp value="10000000.0"/>
+      <kd value="1.0"/>
+    </gazebo>
+
+  </xacro:macro>
+
+  <xacro:macro name="fixed_wheel" params="name parent y">
+    <xacro:block name="${name}" length="${0.05*car_height}"
+        width="${0.05*car_height}" height="${0.05*car_height}" mass="0.1"/>
+    <joint name="${name}_axle" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${name}"/>
+      <origin xyz="0.0 ${y} 0.0" rpy="0.0 0.0 0.0"/>
+    </joint>
+
+    <xacro:generic_wheel name="${name}" parent="${name}"
+        radius="${wheel_radius}" width="${wheel_width}"/>
+  </xacro:macro>
+
+  <xacro:macro name="steered_wheel" params="name parent y">
+    <xacro:block name="${name}_steer" length="${0.05*car_height}"
+        width="${0.05*car_height}" height="${0.05*car_height}" mass="0.1"/>
+    <joint name="${name}_steer_joint" type="revolute">
+      <parent link="${parent}"/>
+      <child link="${name}_steer"/>
+      <origin xyz="0.0 ${y} 0.0" rpy="0.0 0.0 0.0"/>
+      <axis xyz="0.0 0.0 -1.0"/>
+      <limit effort="10.0" upper="${max_steer}" lower="${min_steer}" velocity="0.5"/>
+    </joint>
+
+    <transmission name="${name}_steer_tran">
+      <type>transmission_interface/SimpleTransmission</type>
+      <joint name="${name}_steer_joint">
+        <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      </joint>
+      <actuator name="${name}_steer_motor">
+        <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+        <mechanicalReduction>1</mechanicalReduction>
+      </actuator>
+    </transmission>
+
+    <xacro:generic_wheel name="${name}" parent="${name}_steer"
+        radius="${wheel_radius}" width="${wheel_width}"/>
+  </xacro:macro>
+
+  <!-- Car Definition -->
+  <link name="base_link"/>
+  <xacro:block name="chassis_link" length="${car_length}"
+      width="${car_width}" height="${0.4*car_height}" mass="10.0"/>
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="chassis_link"/>
+    <origin xyz="0.0 0.0 ${0.3*car_height}" rpy="0.0 0.0 0.0"/>
+  </joint>
+
+  <!-- virtual joint that allows visualization of where the
+    base_link is steering (given the lead steer joint) -->
+  <link name="base_steer"/>
+  <joint name="base_steer_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="base_steer"/>
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    <axis xyz="0.0 0.0 -1.0"/>
+    <limit effort="1000.0" upper="${max_steer}" lower="${min_steer}" velocity="0.5"/>
+  </joint>
+
+  <xacro:block name="top_link" length="${car_length}"
+      width="${car_width}" height="${0.1*car_height}" mass="0.5"/>
+  <joint name="test_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="top_link"/>
+    <origin xyz="0.0 0.0 ${0.95*car_height}" rpy="0.0 0.0 0.0"/>
+  </joint>
+
+  <xacro:block name="front_axle" length="${0.1*car_height}"
+      width="${car_width}" height="${0.1*car_height}" mass="0.1"/>
+  <joint name="front_axle_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="front_axle"/>
+    <origin xyz="${0.35*car_length} 0.0 ${0.1*car_height}" rpy="0.0 0.0 0.0"/>
+  </joint>
+
+  <!-- this is the virtual joint that represents the front of the bicycle
+    in the bicycle model, it will be controlled and the left and right
+    actual joints will respond to it appropriately to maintain a steer center -->
+  <link name="lead_steer"/>
+  <joint name="lead_steer_joint" type="revolute">
+    <parent link="front_axle"/>
+    <child link="lead_steer"/>
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    <axis xyz="0.0 0.0 -1.0"/>
+    <limit effort="1000.0" upper="${max_steer}" lower="${min_steer}" velocity="0.5"/>
+  </joint>
+  <!-- virtual wheel that will represent the desired velocity
+    of the vehicle (so need radius encoded in it also) -->
+  <link name="wheel_lead"/>
+  <joint name="wheel_lead_axle" type="continuous">
+    <parent link="lead_steer"/>
+    <child link="wheel_lead"/>
+    <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+    <axis xyz="0.0 1.0 0.0"/>
+    <limit effort="1000.0" velocity="0.5"/>
+  </joint>
+
+  <xacro:steered_wheel name="front_left" parent="front_axle"
+      y="${car_width/2 + wheel_width/2 + 0.1}"/>
+  <xacro:steered_wheel name="front_right" parent="front_axle"
+      y="${-car_width/2 - wheel_width/2 - 0.1}"/>
+
+  <xacro:block name="back_axle" length="${0.1*car_height}"
+      width="${car_width}" height="${0.1*car_height}" mass="0.1"/>
+  <joint name="back_axle_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="back_axle"/>
+    <origin xyz="${-0.3*car_length} 0.0 ${0.1*car_height}" rpy="0.0 0.0 0.0"/>
+  </joint>
+
+  <xacro:fixed_wheel name="back_left" parent="back_axle"
+      y="${car_width/2 + wheel_width/2 + 0.1}"/>
+  <xacro:fixed_wheel name="back_right" parent="back_axle"
+      y="${-1 * (car_width/2 + wheel_width/2 + 0.1)}"/>
+
+  <!-- sensors -->
+  <xacro:importable_multisenseS21 name="multisense" parent="base_link">
+    <origin xyz="${0.5*car_length - 0.1} 0.0 ${0.5*car_height + 0.05}" rpy="0.0 0.0 0.0"/>
+  </xacro:importable_multisenseS21>
+
+  <!-- Gazebo Simulation -->
+  <gazebo>
+    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+      <robotNamespace>/carbot</robotNamespace>
+      <robotParam>/robot_description</robotParam>
+      <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+    </plugin>
+  </gazebo>
+
+</robot>
+

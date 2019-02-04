@@ -1,0 +1,30 @@
+carbot:
+# MoveIt-specific simulation settings
+  moveit_sim_hw_interface:
+    joint_model_group: controllers_initial_group_
+    joint_model_group_pose: controllers_initial_pose_
+# Settings for ros_control control loop
+  generic_hw_control_loop:
+    loop_hz: 300
+    cycle_time_error_threshold: 0.01
+# Settings for ros_control hardware interface
+  hardware_interface:
+    joints:
+      - world_joint
+      - wheel_back_left_axle
+      - wheel_back_right_axle
+      - base_steer_joint
+      - front_left_steer_joint
+      - wheel_front_left_axle
+      - front_right_steer_joint
+      - wheel_front_right_axle
+      - lead_steer_joint
+      - wheel_lead_axle
+    sim_control_mode: 1  # 0: position, 1: velocity
+# Publish all joint states
+# Creates the /joint_states topic necessary in ROS
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 50
+  controller_list:
+    []

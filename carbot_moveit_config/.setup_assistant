@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: carbot_description
+    relative_path: urdf/carbot.xacro
+    xacro_args: "--inorder "
+  SRDF:
+    relative_path: config/carbot.srdf
+  CONFIG:
+    author_name: Aurelio Puebla
+    author_email: aureliopuebla_9@hotmail.com
+    generated_timestamp: 1549315775
