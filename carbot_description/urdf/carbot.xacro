@@ -1,5 +1,7 @@
 <?xml version="1.0"?>
 <robot name="carbot" xmlns:xacro="http://wiki.ros.org/xacro">
+  <!-- This file has been modified from it's original version to fit out own
+       vehicle description. This is to be used as a basic model for visualization. -->
 
   <xacro:property name="car_length" value="4.0"/> 
   <xacro:property name="car_width" value="1.5"/>
