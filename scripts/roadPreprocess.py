@@ -13,6 +13,7 @@ PUBLISH_UDISPARITY_ROAD_FILTER = True
 PUBLISH_VDISPARITY_WITH_FITTED_LINE = True
 PUBLISH_LINE_FITTED_ROAD = True
 
+# Road Line Fit Parameters
 # Note: Disparity values are uint16.
 MAX_DISPARITY = 16383
 HISTOGRAM_BINS = 256
@@ -21,8 +22,15 @@ FLATNESS_THRESHOLD = 2
 RANSAC_TRIES = 2000
 RANSAC_EPSILON = 1
 ROAD_LINE_FIT_ALPHA = 0.20
-VANISHING_POINT_CANDIDATES_BOX_HEIGHT = 40
-VANISHING_POINT_CANDIDATES_BOX_WIDTH = 300
+
+# Vanishing Point Detection Parameters
+VP_N = 4  # Implementation Specific
+VP_CANDIDATES_BOX_HEIGHT = 40
+VP_LAMBDA = 4 * np.sqrt(2)
+VP_KERNEL_SIZE = int(10 * VP_LAMBDA / np.pi) + 1  # Must be odd
+VP_W0 = 2 * np.pi / VP_LAMBDA
+VP_K = np.pi / 2
+VP_DELTA = -VP_W0**2 / (VP_K**2 * 8)
 
 
 def getHistogram(array):
@@ -88,22 +96,15 @@ def getRoadLineFitFilter(dispImage, m, b):
         dispImage - roadRowValues) <= ROAD_LINE_FIT_ALPHA * roadRowValues
 
 
-def getVanishingPointCandidatesBox(lineFittedRoadFilter, b):
-    top = int(b - VANISHING_POINT_CANDIDATES_BOX_HEIGHT / 4)
-    bottom = int(b + VANISHING_POINT_CANDIDATES_BOX_HEIGHT * 3 / 4)
-    _, cols = lineFittedRoadFilter.shape
-    VPCandidateXCoordanates = (lineFittedRoadFilter[top:bottom+1] *
-                               np.mgrid[0:bottom-top+1, 0:cols][1])
-    Xmean = (np.sum(VPCandidateXCoordanates) /
-             np.count_nonzero(lineFittedRoadFilter[top:bottom+1]))
-    left = int(max(0, Xmean - VANISHING_POINT_CANDIDATES_BOX_WIDTH/2))
-    right = int(min(cols-1, Xmean + VANISHING_POINT_CANDIDATES_BOX_WIDTH/2))
-    return left, top, right, bottom
+def applyGaborKernels(cameraImage, b, gaborKernels):
+    top = int(b - VP_CANDIDATES_BOX_HEIGHT / 4)
+    bottom = int(b + VP_CANDIDATES_BOX_HEIGHT * 3 / 4)
 
 
 def preprocessRoadCallback(cameraImageMsg,
                            dispImageMsg,
                            bridge,
+                           gaborKernels,
                            UdispRoadFilterImagePub=None,
                            VdispWithFittedLineImagePub=None,
                            lineFittedRoadImagePub=None):
@@ -129,9 +130,7 @@ def preprocessRoadCallback(cameraImageMsg,
     VDispImage = np.apply_along_axis(getHistogram, 1, dispImage * UDispFilter)
     m, b = getRANSACFittedLine(VDispImage)
     lineFittedRoadFilter = getRoadLineFitFilter(dispImage, m, b)
-    left, top, right, bottom = getVanishingPointCandidatesBox(
-        lineFittedRoadFilter, b)
-    # https: // ieeexplore.ieee.org / document / 5957282
+    applyGaborKernels(cameraImage, b, *gaborKernels)
 
     if UdispRoadFilterImagePub is not None:
         # Convert Binary Image to uint8.
@@ -158,13 +157,30 @@ def preprocessRoadCallback(cameraImageMsg,
                  pt2=(cameraImage.shape[1] - 1, int(b)),
                  color=(0, 0, 255),
                  thickness=2)
-        cv2.rectangle(lineFittedRoad,
-                      pt1=(left, top),
-                      pt2=(right, bottom),
-                      color=(255, 0, 0),
-                      thickness=2)
         lineFittedRoadImagePub.publish(
             bridge.cv2_to_imgmsg(lineFittedRoad, encoding='bgr8'))
+
+
+def getGaborFilterKernels():
+    gaborKernels = np.zeros(
+        (VP_KERNEL_SIZE, VP_KERNEL_SIZE, VP_N), dtype=np.complex128)
+    for i in range(VP_N):
+        theta = np.pi/2 + i*np.pi/VP_N
+        for y in range(-VP_KERNEL_SIZE//2, VP_KERNEL_SIZE//2+1):
+            ySinTheta = y * np.sin(theta)
+            yCosTheta = y * np.cos(theta)
+            for x in range(-VP_KERNEL_SIZE//2, VP_KERNEL_SIZE//2+1):
+                xCosTheta = x * np.cos(theta)
+                xSinTheta = x * np.sin(theta)
+                a = xCosTheta + ySinTheta
+                b = -xSinTheta + yCosTheta
+                gaborKernels[y+VP_KERNEL_SIZE//2, x+VP_KERNEL_SIZE//2, i] = (
+                        VP_W0 / (np.sqrt(2 * np.pi) * VP_K) *
+                        np.exp(VP_DELTA * (4 * a**2 + b**2)) *
+                        (np.exp(1j * VP_W0 * a) - np.exp(-VP_K**2 / 2)))
+    np.save('gaborKernels.npy', gaborKernels)
+    raise Exception('DONE')
+    return gaborKernels
 
 
 def listener():
@@ -187,6 +203,7 @@ def listener():
     ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
     ts.registerCallback(preprocessRoadCallback,
                         bridge,
+                        getGaborFilterKernels(),
                         UdispRoadFilterImagePub,
                         VdispWithFittedLineImagePub,
                         lineFittedRoadImagePub)

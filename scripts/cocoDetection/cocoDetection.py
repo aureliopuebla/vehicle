@@ -29,8 +29,7 @@ def cocoDetectionCallback(cameraImageMsg, args):
     boxes = detectionGraph.get_tensor_by_name('detection_boxes:0')
     scores = detectionGraph.get_tensor_by_name('detection_scores:0')
     classes = detectionGraph.get_tensor_by_name('detection_classes:0')
-    numDetections = detectionGraph.get_tensor_by_name(
-        'num_detections:0')
+    numDetections = detectionGraph.get_tensor_by_name('num_detections:0')
 
     (boxes, scores, classes, num_detections) = sess.run(
         [boxes, scores, classes, numDetections],
