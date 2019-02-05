@@ -34,8 +34,8 @@ int main(int argc, char** argv) {
   // Camera Parameters extracted from calib_cam_to_cam.txt
   sensor_msgs::CameraInfo camInfoMsg;
   camInfoMsg.header.frame_id = FRAME_ID;
-  camInfoMsg.height = 1242;
-  camInfoMsg.width = 375;
+  camInfoMsg.height = 375;
+  camInfoMsg.width = 1242;
   /*camInfoMsg.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
   camInfoMsg.D = {
       -3.691481e-01, 1.968681e-01, 1.353473e-03, 5.677587e-04, -6.770705e-02};*/

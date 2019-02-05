@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="use_rviz" default="false"/>
-  <arg name="use_joint_gui" default="true"/>
+  <arg name="use_joint_gui" default="false"/>
   <arg name="use_static_tf" default="true"/>
   <arg name="use_robot_pub" default="true"/>
 
@@ -35,6 +35,6 @@
 
   <node if="$(arg use_static_tf)"
       pkg="tf" type="static_transform_publisher" name="static_transform_publisher"
-      args="0 0 0.2 0 0 0 map base_link 30"/>
+      args="0 0 0.0 0 0 0 map base_link 30"/>
 
 </launch>
