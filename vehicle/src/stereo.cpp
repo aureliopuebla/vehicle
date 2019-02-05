@@ -2,6 +2,7 @@
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/distortion_models.h>
 #include <time.h>
 
 #include <opencv2/highgui/highgui.hpp>
@@ -24,11 +25,11 @@ int main(int argc, char** argv) {
 
   image_transport::ImageTransport it(nh);
   image_transport::CameraPublisher leftPub =
-      it.advertiseCamera("camera/left/image", 1);
+      it.advertiseCamera("camera/left/image_rect", 1);
   image_transport::CameraPublisher depthPub =
-      it.advertiseCamera("camera/depth/image", 1);
+      it.advertiseCamera("camera/depth/image_rect", 1);
   image_transport::CameraPublisher dispPub =
-      it.advertiseCamera("camera/disp/image", 1);
+      it.advertiseCamera("camera/disp/image_rect", 1);
 
   sensor_msgs::Image leftImageMsg, depthImageMsg, dispImageMsg;
   // Camera Parameters extracted from calib_cam_to_cam.txt
@@ -36,9 +37,9 @@ int main(int argc, char** argv) {
   camInfoMsg.header.frame_id = FRAME_ID;
   camInfoMsg.height = 375;
   camInfoMsg.width = 1242;
-  /*camInfoMsg.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
+  camInfoMsg.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
   camInfoMsg.D = {
-      -3.691481e-01, 1.968681e-01, 1.353473e-03, 5.677587e-04, -6.770705e-02};*/
+      -3.691481e-01, 1.968681e-01, 1.353473e-03, 5.677587e-04, -6.770705e-02};
   camInfoMsg.K = {9.597910e+02, 0.000000e+00, 6.960217e+02,
                   0.000000e+00, 9.569251e+02, 2.241806e+02,
                   0.000000e+00, 0.000000e+00, 1.000000e+00};
@@ -61,12 +62,17 @@ int main(int argc, char** argv) {
       ssd << std::setfill('0') << std::setw(10) << i << ".png";
 
       cv::Mat leftImage = cv::imread(ssl.str(), cv::IMREAD_UNCHANGED);
-      cv::Mat depthImage = cv::imread(ssd.str(), cv::IMREAD_UNCHANGED);
-      /*cv::threshold(DEPTH_TO_DISP / (dispImage + 1), // Convert to Disparity.
+      // KIITI depth images are stored as uint16 with a 1/256 factor to meters.
+      cv::Mat depthImage, temp = cv::imread(ssd.str(), cv::IMREAD_UNCHANGED);
+      temp.convertTo(depthImage, CV_32FC1);
+      depthImage /= 256.0;
+      // Convert uint16 depth image (temp) to disp by a factor of the inverse.
+      cv::Mat dispImage = cv::imread(ssd.str(), cv::IMREAD_UNCHANGED);
+      cv::threshold(DEPTH_TO_DISP / (temp + 1), // Convert to Disparity.
                     dispImage, // dst
-                    65535-1, // thresshold, eliminates invalid depths/disps.
+                    65535-1, // threshold, eliminates invalid depths/disps.
                     0, 
-                    cv::THRESH_TOZERO_INV);  !!!!!!!!!!!!!!!!!!!! */
+                    cv::THRESH_TOZERO_INV);
       // Extend sparse values to simulate the Multisense density.
       //cv::Mat count = (dispImage != 0) / 255;
       //count.convertTo(count, CV_16UC1);
@@ -77,11 +83,14 @@ int main(int argc, char** argv) {
 
       cv_bridge::CvImage(camInfoMsg.header, "bgr8", leftImage)
           .toImageMsg(leftImageMsg);
-      cv_bridge::CvImage(camInfoMsg.header, "16UC1", depthImage)
+      cv_bridge::CvImage(camInfoMsg.header, "32FC1", depthImage)
           .toImageMsg(depthImageMsg);
+      cv_bridge::CvImage(camInfoMsg.header, "16UC1", dispImage)
+          .toImageMsg(dispImageMsg);
 
       leftPub.publish(leftImageMsg, camInfoMsg, currentTimestamp);
       depthPub.publish(depthImageMsg, camInfoMsg, currentTimestamp);
+      dispPub.publish(dispImageMsg, camInfoMsg, currentTimestamp);
 
       ros::spinOnce();
       loop_rate.sleep();

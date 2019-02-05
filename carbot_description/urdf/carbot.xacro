@@ -232,7 +232,7 @@
 
   <!-- sensors -->
   <xacro:importable_multisenseS21 name="multisense" parent="base_link">
-    <origin xyz="${0.5*car_length - 0.1} 0.0 ${0.5*car_height + 0.05}" rpy="0.0 0.0 0.0"/>
+    <origin xyz="${0.5*car_length - 1.1} 0.0 ${0.5*car_height + 0.4}" rpy="0.0 0.0 0.0"/>
   </xacro:importable_multisenseS21>
 
   <!-- Gazebo Simulation -->

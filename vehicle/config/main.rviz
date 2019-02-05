@@ -4,6 +4,8 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Grid1
+        - /DepthCloud1
         - /DepthCloud1/Auto Size1
       Splitter Ratio: 0.5
     Tree Height: 483
@@ -44,7 +46,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 10
+      Plane Cell Count: 12
       Reference Frame: <Fixed Frame>
       Value: true
     - Attached Body Color: 150; 50; 150
@@ -215,7 +217,7 @@ Visualization Manager:
       Color Transformer: RGB8
       Color Transport Hint: raw
       Decay Time: 0
-      Depth Map Topic: /camera/depth/image
+      Depth Map Topic: /camera/depth/image_rect
       Depth Map Transport Hint: raw
       Enabled: true
       Invert Rainbow: false
@@ -239,7 +241,7 @@ Visualization Manager:
     - Class: rviz/Camera
       Enabled: true
       Image Rendering: background and overlay
-      Image Topic: /camera/left/image
+      Image Topic: /camera/left/image_rect
       Name: Camera
       Overlay Alpha: 0.5
       Queue Size: 2
@@ -277,25 +279,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 8.75245667
+      Distance: 9.75915527
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 1.87104261
-        Y: 0.436974108
-        Z: 2.15436196
+        X: 3.57236934
+        Y: 0.232935563
+        Z: 2.44603276
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.185398579
+      Pitch: 0.190398887
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.6135428
+      Yaw: 2.62352824
     Saved: ~
 Window Geometry:
   Camera:
