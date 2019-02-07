@@ -4,7 +4,6 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Grid1
         - /DepthCloud1
         - /DepthCloud1/Auto Size1
       Splitter Ratio: 0.5
@@ -213,7 +212,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz/DepthCloud
       Color: 255; 255; 255
-      Color Image Topic: ""
+      Color Image Topic: /camera/cloudColoring/image
       Color Transformer: RGB8
       Color Transport Hint: raw
       Decay Time: 0

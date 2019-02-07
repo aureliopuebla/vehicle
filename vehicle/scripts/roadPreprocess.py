@@ -9,9 +9,10 @@ import random
 import cv2
 
 # The following publications are for visualization only.
-PUBLISH_UDISPARITY_ROAD_FILTER = True
-PUBLISH_VDISPARITY_WITH_FITTED_LINE = True
-PUBLISH_LINE_FITTED_ROAD = True
+PUBLISH_UDISPARITY_ROAD_FILTER = False
+PUBLISH_VDISPARITY_WITH_FITTED_LINE = False
+PUBLISH_LINE_FITTED_ROAD = False
+PUBLISH_CLOUD_COLORING = True
 
 # Road Line Fit Parameters
 # Note: Disparity values are uint16.
@@ -104,10 +105,11 @@ def applyGaborKernels(cameraImage, b, gaborKernels):
 def preprocessRoadCallback(cameraImageMsg,
                            dispImageMsg,
                            bridge,
-                           gaborKernels,
+                           unused_gaborKernels,
                            UdispRoadFilterImagePub=None,
                            VdispWithFittedLineImagePub=None,
-                           lineFittedRoadImagePub=None):
+                           lineFittedRoadImagePub=None,
+                           cloudColoringImagePub=None):
     """Prepocesses the Road with the help of the dispImage.
 
     Args:
@@ -120,6 +122,9 @@ def preprocessRoadCallback(cameraImageMsg,
         contain the VDisparity With the RANSAC fitted line for visualization.
       lineFittedRoadImagePub: If set, it's the ROS Publisher that will contain
         the Line Fitted Road Image with horizon line for visualization.
+      cloudColoringImagePub: If set, it-s the ROS Publisher that contains the
+        corresponding colors for the point cloud based on a color code where
+        RED are obstacles and BLUE is the detected road.
     """
     dispImage = bridge.imgmsg_to_cv2(
         dispImageMsg, desired_encoding='passthrough')
@@ -130,7 +135,7 @@ def preprocessRoadCallback(cameraImageMsg,
     VDispImage = np.apply_along_axis(getHistogram, 1, dispImage * UDispFilter)
     m, b = getRANSACFittedLine(VDispImage)
     lineFittedRoadFilter = getRoadLineFitFilter(dispImage, m, b)
-    applyGaborKernels(cameraImage, b, *gaborKernels)
+    # applyGaborKernels(cameraImage, b, *gaborKernels)
 
     if UdispRoadFilterImagePub is not None:
         # Convert Binary Image to uint8.
@@ -160,6 +165,14 @@ def preprocessRoadCallback(cameraImageMsg,
         lineFittedRoadImagePub.publish(
             bridge.cv2_to_imgmsg(lineFittedRoad, encoding='bgr8'))
 
+    if cloudColoringImagePub is not None:
+        cloudColoring = 255 * np.ones(cameraImage.shape, np.uint8)
+        cloudColoring[:, :, 0:1] *= lineFittedRoadFilter[:, :, np.newaxis]
+        cloudColoringImageMsg = bridge.cv2_to_imgmsg(
+            cloudColoring, encoding='bgr8')
+        cloudColoringImageMsg.header = cameraImageMsg.header
+        cloudColoringImagePub.publish(cloudColoringImageMsg)
+
 
 def getGaborFilterKernels():
     gaborKernels = np.zeros(
@@ -188,25 +201,30 @@ def listener():
     bridge = CvBridge()
 
     UdispRoadFilterImagePub = (
-        rospy.Publisher('/camera/UdispRoadFilter', Image, queue_size=1)
+        rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
         if PUBLISH_UDISPARITY_ROAD_FILTER else None)
     VdispWithFittedLineImagePub = (
-        rospy.Publisher('/camera/VdispWithFittedLine', Image, queue_size=1)
+        rospy.Publisher('/camera/VdispWithFittedLine/image', Image, queue_size=1)
         if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
     lineFittedRoadImagePub = (
-        rospy.Publisher('/camera/lineFittedRoad', Image, queue_size=1)
+        rospy.Publisher('/camera/lineFittedRoad/image', Image, queue_size=1)
         if PUBLISH_LINE_FITTED_ROAD else None)
+    cloudColoringImagePub = (
+        rospy.Publisher('/camera/cloudColoring/image', Image, queue_size=1)
+        if PUBLISH_CLOUD_COLORING else None)
     # TODO: Publish roadLinePub and vanishingPointPub.
 
-    cameraImageSub = message_filters.Subscriber('/camera/image', Image)
-    dispImageSub = message_filters.Subscriber('/camera/disp', Image)
+    cameraImageSub = message_filters.Subscriber('/camera/left/image_rect',
+                                                Image)
+    dispImageSub = message_filters.Subscriber('/camera/disp/image_rect', Image)
     ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
     ts.registerCallback(preprocessRoadCallback,
                         bridge,
-                        getGaborFilterKernels(),
+                        None, #getGaborFilterKernels(),
                         UdispRoadFilterImagePub,
                         VdispWithFittedLineImagePub,
-                        lineFittedRoadImagePub)
+                        lineFittedRoadImagePub,
+                        cloudColoringImagePub)
 
     rospy.spin()
 

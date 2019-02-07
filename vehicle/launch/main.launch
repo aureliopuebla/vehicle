@@ -2,12 +2,12 @@
 
   <include file="$(find carbot_description)/launch/carbot_description.launch"/>
   <node pkg="vehicle" type="stereo" name="stereo_node" respawn="true"/>
+  <node pkg="vehicle" type="roadPreprocess.py" name="roadPreprocess_node"
+        respawn="true"/>
   <node pkg="rviz" name="rviz" type="rviz"
         args="-d $(find vehicle)/config/main.rviz"/>
 
-  <!-- <node pkg="vehicle" type="roadPreprocess.py" name="roadPreprocess_node"
-        respawn="true"/>
-  <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
+  <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
         cwd="node" respawn="true"/> -->
 
 </launch>
