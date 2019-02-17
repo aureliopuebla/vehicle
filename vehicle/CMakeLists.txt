@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   rosconsole
   image_transport
   cv_bridge
+  tf
 )
 find_package(OpenCV REQUIRED)
 
