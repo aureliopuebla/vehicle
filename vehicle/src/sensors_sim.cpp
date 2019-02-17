@@ -156,7 +156,7 @@ void getImages(int idx,
 
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "stereo");
+  ros::init(argc, argv, "sensors_sim");
   ros::NodeHandle nh;
 
   image_transport::ImageTransport it(nh);

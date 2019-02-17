@@ -1,7 +1,6 @@
 <launch>
-
   <include file="$(find carbot_description)/launch/carbot_description.launch"/>
-  <node pkg="vehicle" type="stereo" name="stereo_node" respawn="true"/>
+  <node pkg="vehicle" type="sensors_sim" name="sensors_sim_node" respawn="true"/>
   <node pkg="vehicle" type="roadPreprocess.py" name="roadPreprocess_node"
         respawn="true"/>
   <node pkg="rviz" name="rviz" type="rviz"
@@ -10,4 +9,17 @@
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
         cwd="node" respawn="true"/> -->
 
+  <!--<node pkg="tf" type="static_transform_publisher" name="swri_transform" args="0 0 0 0 0 0 map check 100"  />
+  <node pkg="swri_transform_util" type="initialize_origin.py" name="initialize_origin" >
+    <param name="local_xy_frame" value="map"/>
+    <param name="local_xy_origin" value="map"/>
+    <rosparam param="local_xy_origins">
+        [{ name: map,
+         latitude: 48.999148305,
+         longitude:  8.47308115195,
+         altitude: 117.82245636,
+         heading: 0.0}]
+    </rosparam>
+  </node>
+  <node pkg="mapviz" type="mapviz" name="mapviz"/>-->
 </launch>

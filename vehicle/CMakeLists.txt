@@ -122,8 +122,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(stereo src/stereo.cpp)
-target_link_libraries(stereo ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(sensors_sim src/sensors_sim.cpp)
+target_link_libraries(sensors_sim ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
 
 
 #############
