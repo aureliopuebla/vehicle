@@ -2,7 +2,10 @@
   <include file="$(find carbot_description)/launch/carbot_description.launch"/>
   <node pkg="vehicle" type="sensors_sim" name="sensors_sim_node" respawn="true"/>
   <node pkg="vehicle" type="roadPreprocess.py" name="roadPreprocess_node"
-        respawn="true"/>
+        respawn="true">
+    <param name="initial_B" type="double" value="172.0"/>
+    <param name="initial_M" type="double" value="0.03756009615384615"/>
+  </node>
   <node pkg="rviz" name="rviz" type="rviz"
         args="-d $(find vehicle)/config/main.rviz"/>
 

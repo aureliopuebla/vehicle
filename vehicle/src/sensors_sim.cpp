@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
   sensor_msgs::NavSatFix gpsFixMsg;
   sensor_msgs::Imu imuMsg;
 
-  ros::Rate loop_rate(5);
+  ros::Rate loop_rate(10);
   while (nh.ok()) {
     for (int idx = FIRST_IDX; nh.ok() && idx <= LAST_IDX; idx++) {
       ros::Time timestamp = ros::Time::now();

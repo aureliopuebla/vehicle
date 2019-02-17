@@ -20,7 +20,7 @@ MAX_DISPARITY = 16383
 HISTOGRAM_BINS = 256
 BIN_SIZE = (MAX_DISPARITY+1) / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 2
-RANSAC_TRIES = 2000
+RANSAC_TRIES = 1000
 RANSAC_EPSILON = 1
 ROAD_LINE_FIT_ALPHA = 0.20
 
@@ -53,13 +53,28 @@ def getUDisparityThressholdFilter(dispImage):
                       np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
 
 
+def evaluateRANSACTry(VdispImage, m, b):
+    """Tests how fit a certain RANSAC try is in fitting the road plane."""
+    rows, cols = VdispImage.shape
+    f = 0
+    for x in range(cols):
+        y = int(m * x + b)
+        if y < 0 or y >= rows: break
+        for yp in range(
+                max(0, y - RANSAC_EPSILON), min(rows, y + RANSAC_EPSILON)):
+            f += VdispImage[yp][x]
+    return f
+
+
 def getRANSACFittedLine(VdispImage):
     """Applies RANSAC to find the best line fit of the VDispImage. This is the
        line that fits the approximate road."""
     rows, cols = VdispImage.shape
     cumSumArray = np.cumsum(VdispImage)
     N = cumSumArray[-1]
-    bestM = bestB = bestF = 0
+    global bestM, bestB
+    bestM *= BIN_SIZE  # Adjust m to VdispImage dimensions.
+    bestF = evaluateRANSACTry(VdispImage, bestM, bestB)
     for i in range(RANSAC_TRIES):
         idx1 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
         idx2 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
@@ -71,19 +86,13 @@ def getRANSACFittedLine(VdispImage):
         if x1 == x2: continue  # Do not consider vertical lines
         m = float(y2 - y1) / (x2 - x1)
         b = y1 - m * x1
+        f = evaluateRANSACTry(VdispImage, m, b)
 
-        f = 0
-        for x in range(cols):
-            y = int(m * x + b)
-            if y < 0 or y >= rows: break
-            for yp in range(
-                max(0, y - RANSAC_EPSILON), min(rows, y + RANSAC_EPSILON)):
-                f += VdispImage[yp][x]
         if f > bestF:
             bestF = f
             bestM = m
             bestB = b
-    bestM /= BIN_SIZE  # Adjust m to original disparity values.
+    bestM /= BIN_SIZE  # Adjust m to original dispImage dimensions.
     return bestM, bestB
 
 
@@ -199,6 +208,10 @@ def getGaborFilterKernels():
 def listener():
     rospy.init_node('roadPreprocess', anonymous=False)
     bridge = CvBridge()
+
+    global bestM, bestB
+    bestM = rospy.get_param('~initial_M', 0.0)
+    bestB = rospy.get_param('~initial_B', 0.0)
 
     UdispRoadFilterImagePub = (
         rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
