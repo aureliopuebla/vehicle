@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<robot name="carbot" xmlns:xacro="http://wiki.ros.org/xacro">
+<robot name="carbot" xmlns:xacro="http://ros.org/wiki/xacro">
   <!-- This file has been modified from it's original version to fit out own
        vehicle description. This is to be used as a basic model for visualization. -->
 
