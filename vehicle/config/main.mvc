@@ -1,0 +1,36 @@
+capture_directory: ~
+fixed_frame: map
+target_frame: base_link
+fix_orientation: true
+rotate_90: false
+enable_antialiasing: true
+show_displays: false
+show_status_bar: true
+show_capture_tools: true
+window_width: 846
+window_height: 1028
+view_scale: 0.3676012
+offset_x: 94.4735
+offset_y: 41.90654
+use_latest_transforms: true
+background: "#a0a0a4"
+displays:
+  - type: mapviz_plugins/tile_map
+    name: new display
+    config:
+      visible: true
+      collapsed: false
+      custom_sources:
+        []
+      bing_api_key: AgBmM1o9LLkHC2ufbj5VrWEbD675iVXmdTz63sp-g573CJdFVy91MFRN6Ov9PQyu
+      source: Bing Maps (terrain)
+  - type: mapviz_plugins/navsat
+    name: new display
+    config:
+      visible: true
+      collapsed: false
+      topic: /oxts/gps
+      color: "#ff0000"
+      draw_style: points
+      position_tolerance: 10
+      buffer_size: 10
