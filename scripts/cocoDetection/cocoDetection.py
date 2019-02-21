@@ -6,8 +6,8 @@ from cv_bridge import CvBridge
 from utils import visualization_utils as vis_util
 from utils import label_map_util
 import tensorflow as tf
-import numpy as np
-import os
+import numpy as n
+port os
 
 # MODEL_NAME = 'ssd_mobilenet_v1_coco_11_06_2017'
 # MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'

@@ -1,0 +1,26 @@
+<annotation>
+	<folder>images</folder>
+	<filename>IMG_20190121_153609.jpg</filename>
+	<path>/home/emilio/Projects/vehicle/pavo_train/images/IMG_20190121_153609.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>800</width>
+		<height>1067</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>pavoreal</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>279</xmin>
+			<ymin>477</ymin>
+			<xmax>425</xmax>
+			<ymax>566</ymax>
+		</bndbox>
+	</object>
+</annotation>
