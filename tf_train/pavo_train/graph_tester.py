@@ -27,144 +27,182 @@ import time
 
 
 
+
+
+########################################################
+
+# Gloabl path variables
 path_to_graph = None
 path_to_photos = None
 path_to_labels = None
-
+path_to_video = None
+is_video = False
 
 # Print helper mesage
 def usage():
-  sys.exit('Error specifying input or output folder \n' \
-    + 'custom_resize.py -g <graph_path_folder> -f <photos_path_folder>')
+    sys.exit('Error specifying input or output folder \n' \
+        + '')
 
-NUM_ARGS = 3
+
+NUM_MIN_ARGS = 3
 # Get paths to test photos and gaph
 def retrieve_paths(argv):
-  global path_to_photos
-  global path_to_graph
-  global path_to_labels
+    global path_to_photos
+    global path_to_graph
+    global path_to_labels
+    global path_to_video
+    global is_video
 
-  # Verify params
-  try:
-    if (not (len(argv)>NUM_ARGS)):
-      usage()
+    # Verify params
+    try:
+        if (not (len(argv)>NUM_MIN_ARGS)):
+            usage()
+        opts, args = getopt.getopt(argv,"l:g:f:hv:",["labels_folder=","graph_folder=","photos_folder="])
+    except getopt.GetoptError:
+        usage()
 
-    opts, args = getopt.getopt(argv,"hl:g:f:",["labels_folder=","graph_folder=","photos_folder="])
-  except getopt.GetoptError:
-    usage()
+    # Get folder names
+    for opt, arg in opts:
+        if opt == '-h':
+            usage()
+        elif opt == '-v':
+            is_video = True
+            path_to_video = arg
+        elif opt in ('-g', "--graph_folder"):
+            # get the .pb inside the folder
+            for file in os.listdir(arg):
+                if file.endswith(".pb"):
+                    path_to_graph = arg + '/' + file
+        elif opt in ("-f", "--photos_folder"):
+            path_to_photos = arg
+        elif opt in ("-l", "--labels_folder"):
+            # get the .pbtxt inside the folder
+            for file in os.listdir(arg):
+                if file.endswith(".pbtxt"):
+                    path_to_labels = arg + '/' + file
 
-  # Get folder names
-  for opt, arg in opts:
-    if opt == '-h':
-      usage()
-    elif opt in ('-g', "--graph_folder"):
-      # get the .pb inside the folder
-      for file in os.listdir(arg):
-        if file.endswith(".pb"):
-          path_to_graph = arg + '/' + file
-    elif opt in ("-f", "--photos_folder"):
-      path_to_photos = arg
-    elif opt in ("-l", "--labels_folder"):
-      # get the .pbtxt inside the folder
-      for file in os.listdir(arg):
-        if file.endswith(".pbtxt"):
-          path_to_labels = arg + '/' + file
 
-  print "File paths are:"
-  print "Graph : ", path_to_graph
-  print "Labels : ", path_to_labels
-  print "Photos : ", path_to_photos
+    print "File paths are:"
+    print "Graph  :", path_to_graph
+    print "Labels :", path_to_labels
+    print "Photos :", path_to_photos
+    print "Video  :", path_to_video
 
-  if (path_to_photos == None or path_to_graph == None or path_to_photos == None):
-    raise  ValueError('Paths are incomplete or misgiven')
+    if (is_video):
+        assert (path_to_labels != None and path_to_graph != None and path_to_video != None)
+    else:
+        assert (path_to_labels != None and path_to_graph != None and path_to_photos != None)
 
+
+
+
+
+def process_frame(current_image_np, detection_graph, sess, class_index_mapping):
+    ## PROCESS DETECTION ##
+    # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
+    current_image_np_expanded = np.expand_dims(current_image_np, axis=0)
+    image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
+    # Each box represents a part of the image where a particular object was detected.
+    boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
+    # Each score represent how level of confidence for each of the objects.
+    # Score is shown on the result image, together with the class label.
+    scores = detection_graph.get_tensor_by_name('detection_scores:0')
+    classes = detection_graph.get_tensor_by_name('detection_classes:0')
+    num_detections = detection_graph.get_tensor_by_name('num_detections:0')
+
+    # Get time per frame
+    start_time = time.time()
+
+    # Run session for detecion
+    (boxes, scores, classes, num_detections) = sess.run(
+        [boxes, scores, classes, num_detections],
+        feed_dict={image_tensor: current_image_np_expanded})
+    end_time = time.time()
+
+
+    print("Elapsed Time per Frame:", end_time-start_time)
+
+    # Visualization of the results of a detection.
+    # Mapping to labels is on 'class index mapping'
+    # min_score_thresh default is 0.5
+    vis_util.visualize_boxes_and_labels_on_image_array(
+        current_image_np,
+        np.squeeze(boxes),
+        np.squeeze(classes).astype(np.int32),
+        np.squeeze(scores),
+        class_index_mapping,
+        use_normalized_coordinates=True,
+        line_thickness=8,
+        min_score_thresh=0.5)
 
 
 
 
 def main(argv):
-  retrieve_paths(argv)
+    retrieve_paths(argv)
 
-  # Total number of classes detected by graph
-  NUM_CLASSES = 1
+    # Total number of classes detected by graph
+    NUM_CLASSES = 1
 
-  # Load label mappings
-  label_map = label_map_util.load_labelmap(path_to_labels)
-  categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=NUM_CLASSES, use_display_name=True)
-  class_index_mapping = label_map_util.create_category_index(categories)
+    # Load label mappings
+    label_map = label_map_util.load_labelmap(path_to_labels)
+    categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=NUM_CLASSES, use_display_name=True)
+    class_index_mapping = label_map_util.create_category_index(categories)
+    
+    # Loading detection grapho
+    detection_graph = tf.Graph()
+    with detection_graph.as_default():
+        od_graph_def = tf.GraphDef()
+        with tf.gfile.GFile(path_to_graph, 'rb') as fid:
+            serialized_graph = fid.read()
+            od_graph_def.ParseFromString(serialized_graph)
+            tf.import_graph_def(od_graph_def, name='')
 
-  # Loading detection grapho
-  detection_graph = tf.Graph()
-  with detection_graph.as_default():
-    od_graph_def = tf.GraphDef()
-    with tf.gfile.GFile(path_to_graph, 'rb') as fid:
-      serialized_graph = fid.read()
-      od_graph_def.ParseFromString(serialized_graph)
-      tf.import_graph_def(od_graph_def, name='')
+    # Running TF session
+    with detection_graph.as_default():
+        with tf.Session(graph=detection_graph) as sess:
 
-  # Running TF session
-  with detection_graph.as_default():
-    with tf.Session(graph=detection_graph) as sess:
+            if (is_video):
+                # Load video and change resolution
+                cap = cv2.VideoCapture(path_to_video)
 
-      list_of_images_paths = os.listdir(path_to_photos)
+                # play whole video
+                while (cap.isOpened()):
+                    # read new frame
+                    ret, frame = cap.read()
 
-      for img_path in list_of_images_paths:
+                    # resize image to fit display and performance
+                    frame = cv2.resize(frame, (480,640))
+                    
+                    # run the detection 
+                    process_frame(frame, detection_graph, sess, class_index_mapping)
+                    
+                    # show image
+                    cv2.imshow('image',frame)
+                    if cv2.waitKey(3) & 0xFF == ord('q'):
+                        cv2.destroyAllWindows()
+                        break
+            else:
+                list_of_images_paths = os.listdir(path_to_photos)
 
-        if not img_path.endswith(".jpg"):
-          continue
-        #######################################################
-        #      CHANGE TO RETRIEVE IMAGE FROM ROS NODE         #
-        #######################################################
-        current_image_np = cv2.imread(path_to_photos + img_path, cv2.IMREAD_COLOR)
-        cv2.imshow('image',current_image_np)
-        # cv2.waitKey(5000)
-        ## PROCESS DETECTION ##
-        # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-        current_image_np_expanded = np.expand_dims(current_image_np, axis=0)
-        image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
-        # Each box represents a part of the image where a particular object was detected.
-        boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
-        # Each score represent how level of confidence for each of the objects.
-        # Score is shown on the result image, together with the class label.
-        scores = detection_graph.get_tensor_by_name('detection_scores:0')
-        classes = detection_graph.get_tensor_by_name('detection_classes:0')
-        num_detections = detection_graph.get_tensor_by_name('num_detections:0')
-        
-        # Get time per frame
-        start_time = time.time()
-        
-        # Run session for detecion
-        (boxes, scores, classes, num_detections) = sess.run(
-            [boxes, scores, classes, num_detections],
-            feed_dict={image_tensor: current_image_np_expanded})
-        end_time = time.time()
+                for img_path in list_of_images_paths:
+                    if not img_path.endswith(".jpg"):
+                        continue
+                    
+                    current_image_np = cv2.imread(path_to_photos + img_path, cv2.IMREAD_COLOR)
+                    cv2.imshow('image',current_image_np)
+                    
+                    process_frame(current_image_np, detection_graph, sess, class_index_mapping)
 
-
-        print("Elapsed Time per Frame:", end_time-start_time)
-
-
-        # Visualization of the results of a detection.
-        # Mapping to labels is on 'class index mapping'
-        # min_score_thresh default is 0.5
-        vis_util.visualize_boxes_and_labels_on_image_array(
-            current_image_np,
-            np.squeeze(boxes),
-            np.squeeze(classes).astype(np.int32),
-            np.squeeze(scores),
-            class_index_mapping,
-            use_normalized_coordinates=True,
-            line_thickness=8,
-            min_score_thresh=0.5)
-
-        # Show image and wait for break
-        # Resize to a convenient size for displaying
-        # cv2.imshow('image',cv2.resize(current_image_np,(1280,960)))
-        cv2.imshow('image',current_image_np)
-        if cv2.waitKey(3000) & 0xFF == ord('q'):
-			cv2.destroyAllWindows()
-			break
+                    # Show image and wait for break
+                    # Resize to a convenient size for displaying
+                    # cv2.imshow('image',cv2.resize(current_image_np,(1280,960)))
+                    cv2.imshow('image',current_image_np)
+                    if cv2.waitKey(3000) & 0xFF == ord('q'):
+                        cv2.destroyAllWindows()
+                        break
 
 
 if __name__ == '__main__':
-  main(sys.argv[1:])
+    main(sys.argv[1:])
 

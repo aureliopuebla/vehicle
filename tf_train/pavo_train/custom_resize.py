@@ -51,9 +51,10 @@ def main(argv):
 	print('Output path:\t', path_to_out_folder)
 
 	list_of_images_paths = os.listdir(path_to_source_folder)
-
+	print ("list of imgs: ", list_of_images_paths)
 	for img_path in list_of_images_paths:
 		# Load img
+		print ("Loading : ", path_to_source_folder +img_path)
 		cur_img = cv2.imread(path_to_source_folder + img_path, cv2.IMREAD_COLOR)
 		print ('Current img size : ', cur_img.shape[:2])
 		resize_img = []
