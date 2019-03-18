@@ -1,0 +1,26 @@
+<annotation>
+	<folder>images</folder>
+	<filename>E4679E16-6F13-41F4-A1A7-272FEDBD9210.jpg</filename>
+	<path>/home/emilio/Projects/vehicle/tf_train/pato_pavo/images/E4679E16-6F13-41F4-A1A7-272FEDBD9210.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>800</width>
+		<height>1067</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>pato</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>332</xmin>
+			<ymin>414</ymin>
+			<xmax>404</xmax>
+			<ymax>615</ymax>
+		</bndbox>
+	</object>
+</annotation>

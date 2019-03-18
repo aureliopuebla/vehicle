@@ -179,7 +179,7 @@ def main(argv):
                     
                     # show image
                     cv2.imshow('image',frame)
-                    if cv2.waitKey(3) & 0xFF == ord('q'):
+                    if cv2.waitKey(2) & 0xFF == ord('q'):
                         cv2.destroyAllWindows()
                         break
             else:
