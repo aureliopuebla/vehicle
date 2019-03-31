@@ -5,8 +5,9 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 import numpy as np
-import random
 import cv2
+
+from deprecated_fit_vdisp_line_ransac import *
 
 
 def getHistogram(array):
@@ -26,51 +27,6 @@ def getUDisparityThressholdFilter(dispImage):
     UdispImage = np.apply_along_axis(getHistogram, 0, dispImage)
     return UdispImage[np.minimum(HISTOGRAM_BINS-1, dispImage / BIN_SIZE),
                       np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
-
-
-def evaluateRANSACTry(VdispImage, m, b):
-    """Tests how fit a certain RANSAC try is in fitting the road plane."""
-    rows, cols = VdispImage.shape
-    f = 0
-    for x in range(cols):
-        y = int(m * x + b)
-        if y < 0 or y >= rows:
-            break
-        for yp in range(
-                max(0, y - RANSAC_EPSILON), min(rows, y + RANSAC_EPSILON)):
-            f += VdispImage[yp][x]
-    return f
-
-
-def getRANSACFittedLine(VdispImage):
-    """Applies RANSAC to find the best line fit of the VDispImage. This is the
-       line that fits the approximate road."""
-    rows, cols = VdispImage.shape
-    cumSumArray = np.cumsum(VdispImage)
-    N = cumSumArray[-1]
-    global bestM, bestB
-    bestM *= BIN_SIZE  # Adjust m to VdispImage dimensions.
-    bestF = evaluateRANSACTry(VdispImage, bestM, bestB)
-    for i in range(RANSAC_TRIES):
-        idx1 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
-        idx2 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
-
-        y1 = idx1 / cols
-        x1 = idx1 - y1 * cols
-        y2 = idx2 / cols
-        x2 = idx2 - y2 * cols
-        if x1 == x2:
-            continue  # Do not consider vertical lines
-        m = float(y2 - y1) / (x2 - x1)
-        b = y1 - m * x1
-        f = evaluateRANSACTry(VdispImage, m, b)
-
-        if f > bestF:
-            bestF = f
-            bestM = m
-            bestB = b
-    bestM /= BIN_SIZE  # Adjust m to original dispImage dimensions.
-    return bestM, bestB
 
 
 def getRoadLineFitFilter(dispImage, m, b):
@@ -182,45 +138,9 @@ def getGaborFilterKernels():
     return gaborKernels
 
 
-def listener():
-    rospy.init_node('roadPreprocess', anonymous=False)
-    bridge = CvBridge()
-
-    global bestM, bestB
-    bestM = rospy.get_param('~initial_M', 0.0)
-    bestB = rospy.get_param('~initial_B', 0.0)
-
-    UdispRoadFilterImagePub = (
-        rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
-        if PUBLISH_UDISPARITY_ROAD_FILTER else None)
-    VdispWithFittedLineImagePub = (
-        rospy.Publisher('/camera/VdispWithFittedLine/image',
-                        Image, queue_size=1)
-        if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
-    lineFittedRoadImagePub = (
-        rospy.Publisher('/camera/lineFittedRoad/image', Image, queue_size=1)
-        if PUBLISH_LINE_FITTED_ROAD else None)
-    cloudColoringImagePub = (
-        rospy.Publisher('/camera/cloudColoring/image', Image, queue_size=1)
-        if PUBLISH_CLOUD_COLORING else None)
-    # TODO: Publish roadLinePub and vanishingPointPub.
-
-    cameraImageSub = message_filters.Subscriber('/camera/left/image_rect',
-                                                Image)
-    dispImageSub = message_filters.Subscriber('/camera/disp/image_rect', Image)
-    ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
-    ts.registerCallback(preprocessRoadCallback,
-                        bridge,
-                        None,  # getGaborFilterKernels(),
-                        UdispRoadFilterImagePub,
-                        VdispWithFittedLineImagePub,
-                        lineFittedRoadImagePub,
-                        cloudColoringImagePub)
-
-    rospy.spin()
-
-
 if __name__ == '__main__':
+    rospy.init_node('roadPreprocess', anonymous=False)
+
     # The following publications are for visualization only.
     PUBLISH_UDISPARITY_ROAD_FILTER = rospy.get_param(
         '~publish_udisparity_road_filter', False)
@@ -251,4 +171,32 @@ if __name__ == '__main__':
     VP_K = np.pi / 2
     VP_DELTA = -VP_W0 ** 2 / (VP_K ** 2 * 8)
 
-    listener()
+    bridge = CvBridge()
+    UdispRoadFilterImagePub = (
+        rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
+        if PUBLISH_UDISPARITY_ROAD_FILTER else None)
+    VdispWithFittedLineImagePub = (
+        rospy.Publisher('/camera/VdispWithFittedLine/image',
+                        Image, queue_size=1)
+        if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
+    lineFittedRoadImagePub = (
+        rospy.Publisher('/camera/lineFittedRoad/image', Image, queue_size=1)
+        if PUBLISH_LINE_FITTED_ROAD else None)
+    cloudColoringImagePub = (
+        rospy.Publisher('/camera/cloudColoring/image', Image, queue_size=1)
+        if PUBLISH_CLOUD_COLORING else None)
+    # TODO: Publish roadLinePub and vanishingPointPub.
+
+    cameraImageSub = message_filters.Subscriber('/camera/left/image_rect',
+                                                Image)
+    dispImageSub = message_filters.Subscriber('/camera/disp/image_rect', Image)
+    ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
+    ts.registerCallback(preprocessRoadCallback,
+                        bridge,
+                        None,  # getGaborFilterKernels(),
+                        UdispRoadFilterImagePub,
+                        VdispWithFittedLineImagePub,
+                        lineFittedRoadImagePub,
+                        cloudColoringImagePub)
+
+    rospy.spin()

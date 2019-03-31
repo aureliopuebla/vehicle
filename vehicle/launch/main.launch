@@ -3,22 +3,22 @@
   <node pkg="vehicle" type="sensors_sim" name="sensors_sim_node" respawn="true"/>
   <node pkg="vehicle" type="roadPreprocess.py" name="roadPreprocess_node"
         respawn="true">
-    <param name="initial_M" type="double" value="0.03756009615384615"/>
-    <param name="initial_B" type="double" value="172.0"/>
+    <param name="publish_vdisparity_with_fitted_line" type="bool" value="True"/>
+    <param name="publish_cloud_coloring" type="bool" value="True"/>
   </node>
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
         cwd="node" respawn="true"/> -->
 
   <!-- map has to be in the TF tree: it's broadcasted by sensor_sim -->
-  <node pkg="swri_transform_util" type="initialize_origin.py" name="initialize_origin">
+  <!-- <node pkg="swri_transform_util" type="initialize_origin.py" name="initialize_origin">
     <param name="local_xy_frame" value="map"/>
     <param name="local_xy_origin" value="auto"/>
     <remap from="fix" to="oxts/gps"/>
-  </node>
+  </node> -->
 
   <node pkg="rviz" name="rviz" type="rviz"
         args="-d $(find vehicle)/config/main.rviz"/>
-  <node pkg="mapviz" type="mapviz" name="mapviz">
+  <!-- <node pkg="mapviz" type="mapviz" name="mapviz">
      <param name="config" value="$(find vehicle)/config/main.mvc"/>
-  </node>
+  </node> -->
 </launch>
