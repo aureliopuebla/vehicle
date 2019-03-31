@@ -43,6 +43,7 @@ def get_road_line_fit_filter(disp_image, m, b):
 
 
 def get_ransac_fitted_vdisp_line(vdisp_image):
+    """Gets the vdisp_line using RANSAC running on CUDA."""
     # TODO: Make ctx an input parameter once deprecated_vdisp_line_ransac is
     # removed.
     _ctx.push()
@@ -124,8 +125,8 @@ def preprocess_road_callback(camera_image_msg,
             cv_bridge.cv2_to_imgmsg(vdisp_with_fitted_line, encoding='bgr8'))
 
     if line_fitted_road_image_pub is not None:
-        line_fitted_road = camera_image * \
-            line_fitted_road_filter[:, :, np.newaxis]
+        line_fitted_road = (
+            camera_image * line_fitted_road_filter[:, :, np.newaxis])
         cv2.line(line_fitted_road,
                  pt1=(0, int(b)),
                  pt2=(camera_image.shape[1] - 1, int(b)),

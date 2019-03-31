@@ -7,6 +7,10 @@
 __device__ curandState_t* g_states[THREADS];
 
 extern "C" {
+/**
+ * Initializes the random states for all threads that will execute RANSAC tries.
+ * @param seed The random seed to use. It's recommended setting it to unix time.
+ */
 __global__ void initKernels(int seed)
 {
   int tid = threadIdx.x;
@@ -16,6 +20,13 @@ __global__ void initKernels(int seed)
   g_states[tid] = s;
 }
 
+/**
+ * Helper function that does binary search on a value returning the lower bound.
+ * @param A The sorted array in which to search.
+ * @param N The size of array 'A'.
+ * @param x The element to search for.
+ * @return The lower bound index in 'A' after the search.
+ */
 __device__ int findLowerBound(int A[], int N, int x)
 {
   int l = 0;
@@ -31,6 +42,16 @@ __device__ int findLowerBound(int A[], int N, int x)
   return l;
 }
 
+/**
+ * Executes and reduces RANSAC tries to get a fitted line on the given vdisp.
+ * @param vdisp_image The filtered vdisp image on which to fit the line.
+ * @param rows The number of rows in 'vdisp_image'.
+ * @param cols The number of columns in 'vdisp_image'.
+ * @param vdisp_cum_sum_array The cumulative sum in a linearized version of vdisp_image.
+ * @param acc_disp The maximum value in 'vdisp_cum_sum_array '.
+ * @param m The address where the resulting vdisp_line slope will be returned.
+ * @param b The address where the resulting vdisp_line row-intersect will be returned.
+ */
 __global__ void getVdispLine(int* vdisp_image, int rows, int cols, int* vdisp_cum_sum_array, int acc_vdisp, float* m,
                              float* b)
 {
