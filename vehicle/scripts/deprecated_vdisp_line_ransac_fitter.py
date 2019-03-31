@@ -12,7 +12,7 @@ bestM = 0.0
 bestB = 0.0
 
 
-def evaluateRANSACTry(VdispImage, m, b):
+def evaluate_ransac_try(VdispImage, m, b):
     """Tests how fit a certain RANSAC try is in fitting the road plane."""
     rows, cols = VdispImage.shape
     f = 0
@@ -26,7 +26,7 @@ def evaluateRANSACTry(VdispImage, m, b):
     return f
 
 
-def getRANSACFittedLine(VdispImage):
+def get_ransac_fitted_vdisp_line(VdispImage):
     """Applies RANSAC to find the best line fit of the VDispImage. This is the
        line that fits the approximate road."""
     rows, cols = VdispImage.shape
@@ -34,7 +34,7 @@ def getRANSACFittedLine(VdispImage):
     N = cumSumArray[-1]
     global bestM, bestB
     bestM *= BIN_SIZE  # Adjust m to VdispImage dimensions.
-    bestF = evaluateRANSACTry(VdispImage, bestM, bestB)
+    bestF = evaluate_ransac_try(VdispImage, bestM, bestB)
     for i in range(RANSAC_TRIES):
         idx1 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
         idx2 = np.searchsorted(cumSumArray, random.randint(1, N), side='left')
@@ -47,7 +47,7 @@ def getRANSACFittedLine(VdispImage):
             continue  # Do not consider vertical lines
         m = float(y2 - y1) / (x2 - x1)
         b = y1 - m * x1
-        f = evaluateRANSACTry(VdispImage, m, b)
+        f = evaluate_ransac_try(VdispImage, m, b)
 
         if f > bestF:
             bestF = f

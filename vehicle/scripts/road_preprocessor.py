@@ -10,114 +10,116 @@ import cv2
 from deprecated_vdisp_line_ransac_fitter import *
 
 
-def getHistogram(array):
+def get_histogram(array):
     """Given an array [a0, a1, ...], return a histogram with 'HISTOGRAM_BINS'
        bins in range 0 to MAX_DISPARITY. Values out of range are ignored."""
     return np.histogram(array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
 
 
-def getUDisparityThressholdFilter(dispImage):
+def get_udisp_thresshold_filter(disp_image):
     """Calculates the UDisparity from the given dispImage, and uses it to return
        a boolean filter for dispImage where 'True' is assigned to a given (r,c)
        coordinate iff its corresponding UDisparity value is below a given
        FLATNESS_THRESSHOLD. Such UDisparity value is given by the frequency
        value that corresponds to the disparity value (r,c) in the histogram of
        column 'c'."""
-    rows, cols = dispImage.shape
-    UdispImage = np.apply_along_axis(getHistogram, 0, dispImage)
-    return UdispImage[np.minimum(HISTOGRAM_BINS-1, dispImage / BIN_SIZE),
-                      np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
+    rows, cols = disp_image.shape
+    udisp_image = np.apply_along_axis(get_histogram, 0, disp_image)
+    return udisp_image[np.minimum(HISTOGRAM_BINS-1, disp_image / BIN_SIZE),
+                       np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
 
 
-def getRoadLineFitFilter(dispImage, m, b):
+def get_road_line_fit_filter(disp_image, m, b):
     """Returns a boolean filter for the original road image of the road values
        that are close to the fitted road line."""
-    rows, _ = dispImage.shape
-    roadRowValues = np.fromfunction(
+    rows, _ = disp_image.shape
+    road_row_values = np.fromfunction(
         np.vectorize(lambda r, _: float(r - b) / m), (rows, 1))
     return np.abs(
-        dispImage - roadRowValues) <= ROAD_LINE_FIT_ALPHA * roadRowValues
+        disp_image - road_row_values) <= ROAD_LINE_FIT_ALPHA * road_row_values
 
 
-def applyGaborKernels(cameraImage, b, gaborKernels):
+def apply_gabor_kernels(camera_image, b, gabor_kernels):
     top = int(b - VP_CANDIDATES_BOX_HEIGHT / 4)
     bottom = int(b + VP_CANDIDATES_BOX_HEIGHT * 3 / 4)
 
 
-def preprocessRoadCallback(cameraImageMsg,
-                           dispImageMsg,
-                           bridge,
-                           unused_gaborKernels,
-                           UdispRoadFilterImagePub=None,
-                           VdispWithFittedLineImagePub=None,
-                           lineFittedRoadImagePub=None,
-                           cloudColoringImagePub=None):
+def preprocess_road_callback(camera_image_msg,
+                             disp_image_msg,
+                             cv_bridge,
+                             unused_gabor_kernels,
+                             udisp_road_filter_image_pub=None,
+                             vdisp_with_fitted_line_image_pub=None,
+                             line_fitted_road_image_pub=None,
+                             cloud_coloring_image_pub=None):
     """Prepocesses the Road with the help of the dispImage.
 
     Args:
-      cameraImageMsg: A ROS Message containing the color Road Image.
-      dispImageMsg: A ROS Message containing the corresponding disparity Image.
-      bridge: The CV bridge instance used to convert CV images and ROS Messages.
-      UdispRoadFilterImagePub: If set, it's the ROS Publisher that will contain
+      camera_image_msg: A ROS Message containing the color Road Image.
+      disp_image_msg: A ROS Message containing the corresponding disparity Image.
+      cv_bridge: The CV bridge instance used to convert CV images and ROS Messages.
+      udisp_road_filter_image_pub: If set, it's the ROS Publisher that will contain
         the UDisparity Filter for visualization.
-      VdispWithFittedLineImagePub: If set, it's the ROS Publisher that will
+      vdisp_with_fitted_line_image_pub: If set, it's the ROS Publisher that will
         contain the VDisparity With the RANSAC fitted line for visualization.
-      lineFittedRoadImagePub: If set, it's the ROS Publisher that will contain
+      line_fitted_road_image_pub: If set, it's the ROS Publisher that will contain
         the Line Fitted Road Image with horizon line for visualization.
-      cloudColoringImagePub: If set, it-s the ROS Publisher that contains the
+      cloud_coloring_image_pub: If set, it-s the ROS Publisher that contains the
         corresponding colors for the point cloud based on a color code where
         RED are obstacles and BLUE is the detected road.
     """
-    dispImage = bridge.imgmsg_to_cv2(
-        dispImageMsg, desired_encoding='passthrough')
-    cameraImage = bridge.imgmsg_to_cv2(
-        cameraImageMsg, desired_encoding='passthrough')
+    disp_image = cv_bridge.imgmsg_to_cv2(
+        disp_image_msg, desired_encoding='passthrough')
+    camera_image = cv_bridge.imgmsg_to_cv2(
+        camera_image_msg, desired_encoding='passthrough')
 
-    UDispFilter = getUDisparityThressholdFilter(dispImage)
-    VDispImage = np.apply_along_axis(getHistogram, 1, dispImage * UDispFilter)
-    m, b = getRANSACFittedLine(VDispImage)
-    lineFittedRoadFilter = getRoadLineFitFilter(dispImage, m, b)
+    udisp_filter = get_udisp_thresshold_filter(disp_image)
+    vdisp_image = np.apply_along_axis(
+        get_histogram, 1, disp_image * udisp_filter)
+    m, b = get_ransac_fitted_vdisp_line(vdisp_image)
+    line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
     # applyGaborKernels(cameraImage, b, *gaborKernels)
 
-    if UdispRoadFilterImagePub is not None:
+    if udisp_road_filter_image_pub is not None:
         # Convert Binary Image to uint8.
-        UdispRoadFilterImagePub.publish(bridge.cv2_to_imgmsg(
-            UDispFilter.astype('uint8')*255, encoding='8UC1'))
+        udisp_road_filter_image_pub.publish(cv_bridge.cv2_to_imgmsg(
+            udisp_filter.astype('uint8')*255, encoding='8UC1'))
 
-    if VdispWithFittedLineImagePub is not None:
+    if vdisp_with_fitted_line_image_pub is not None:
         # Show elements with values > 0.
-        VDispImage = VDispImage.astype('uint8')*255
-        VdispWithFittedLine = cv2.cvtColor(VDispImage, cv2.COLOR_GRAY2RGB)
-        _, cols = VDispImage.shape
-        cv2.line(VdispWithFittedLine,
+        vdisp_image = vdisp_image.astype('uint8')*255
+        vdisp_with_fitted_line = cv2.cvtColor(vdisp_image, cv2.COLOR_GRAY2RGB)
+        _, cols = vdisp_image.shape
+        cv2.line(vdisp_with_fitted_line,
                  (0, int(b)),
                  (cols-1, int((cols-1) * (m*BIN_SIZE) + b)),
                  (0, 0, 255),
                  2)
-        VdispWithFittedLineImagePub.publish(
-            bridge.cv2_to_imgmsg(VdispWithFittedLine, encoding='bgr8'))
+        vdisp_with_fitted_line_image_pub.publish(
+            cv_bridge.cv2_to_imgmsg(vdisp_with_fitted_line, encoding='bgr8'))
 
-    if lineFittedRoadImagePub is not None:
-        lineFittedRoad = cameraImage * lineFittedRoadFilter[:, :, np.newaxis]
-        cv2.line(lineFittedRoad,
+    if line_fitted_road_image_pub is not None:
+        line_fitted_road = camera_image * \
+            line_fitted_road_filter[:, :, np.newaxis]
+        cv2.line(line_fitted_road,
                  pt1=(0, int(b)),
-                 pt2=(cameraImage.shape[1] - 1, int(b)),
+                 pt2=(camera_image.shape[1] - 1, int(b)),
                  color=(0, 0, 255),
                  thickness=2)
-        lineFittedRoadImagePub.publish(
-            bridge.cv2_to_imgmsg(lineFittedRoad, encoding='bgr8'))
+        line_fitted_road_image_pub.publish(
+            cv_bridge.cv2_to_imgmsg(line_fitted_road, encoding='bgr8'))
 
-    if cloudColoringImagePub is not None:
-        cloudColoring = 255 * np.ones(cameraImage.shape, np.uint8)
-        cloudColoring[:, :, 0:1] *= lineFittedRoadFilter[:, :, np.newaxis]
-        cloudColoringImageMsg = bridge.cv2_to_imgmsg(
-            cloudColoring, encoding='bgr8')
-        cloudColoringImageMsg.header = cameraImageMsg.header
-        cloudColoringImagePub.publish(cloudColoringImageMsg)
+    if cloud_coloring_image_pub is not None:
+        cloud_coloring = 255 * np.ones(camera_image.shape, np.uint8)
+        cloud_coloring[:, :, 0:1] *= line_fitted_road_filter[:, :, np.newaxis]
+        cloud_coloring_image_msg = cv_bridge.cv2_to_imgmsg(
+            cloud_coloring, encoding='bgr8')
+        cloud_coloring_image_msg.header = camera_image_msg.header
+        cloud_coloring_image_pub.publish(cloud_coloring_image_msg)
 
 
-def getGaborFilterKernels():
-    gaborKernels = np.zeros(
+def get_gabor_filter_kernels():
+    gabor_kernels = np.zeros(
         (VP_KERNEL_SIZE, VP_KERNEL_SIZE, VP_N), dtype=np.complex128)
     for i in range(VP_N):
         theta = np.pi/2 + i*np.pi/VP_N
@@ -129,13 +131,11 @@ def getGaborFilterKernels():
                 xSinTheta = x * np.sin(theta)
                 a = xCosTheta + ySinTheta
                 b = -xSinTheta + yCosTheta
-                gaborKernels[y+VP_KERNEL_SIZE//2, x+VP_KERNEL_SIZE//2, i] = (
+                gabor_kernels[y+VP_KERNEL_SIZE//2, x+VP_KERNEL_SIZE//2, i] = (
                     VP_W0 / (np.sqrt(2 * np.pi) * VP_K) *
                     np.exp(VP_DELTA * (4 * a**2 + b**2)) *
                     (np.exp(1j * VP_W0 * a) - np.exp(-VP_K**2 / 2)))
-    np.save('gaborKernels.npy', gaborKernels)
-    raise Exception('DONE')
-    return gaborKernels
+    return gabor_kernels
 
 
 if __name__ == '__main__':
@@ -171,32 +171,34 @@ if __name__ == '__main__':
     VP_K = np.pi / 2
     VP_DELTA = -VP_W0 ** 2 / (VP_K ** 2 * 8)
 
-    bridge = CvBridge()
-    UdispRoadFilterImagePub = (
+    cv_bridge = CvBridge()
+    udisp_road_filter_image_pub = (
         rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
         if PUBLISH_UDISPARITY_ROAD_FILTER else None)
-    VdispWithFittedLineImagePub = (
+    vdisp_with_fitted_line_image_pub = (
         rospy.Publisher('/camera/VdispWithFittedLine/image',
                         Image, queue_size=1)
         if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
-    lineFittedRoadImagePub = (
+    line_fitted_road_image_pub = (
         rospy.Publisher('/camera/lineFittedRoad/image', Image, queue_size=1)
         if PUBLISH_LINE_FITTED_ROAD else None)
-    cloudColoringImagePub = (
+    cloud_coloring_image_pub = (
         rospy.Publisher('/camera/cloudColoring/image', Image, queue_size=1)
         if PUBLISH_CLOUD_COLORING else None)
     # TODO: Publish roadLinePub and vanishingPointPub.
 
-    cameraImageSub = message_filters.Subscriber('/camera/left/image_rect',
-                                                Image)
-    dispImageSub = message_filters.Subscriber('/camera/disp/image_rect', Image)
-    ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
-    ts.registerCallback(preprocessRoadCallback,
-                        bridge,
-                        None,  # getGaborFilterKernels(),
-                        UdispRoadFilterImagePub,
-                        VdispWithFittedLineImagePub,
-                        lineFittedRoadImagePub,
-                        cloudColoringImagePub)
+    camera_image_sub = message_filters.Subscriber('/camera/left/image_rect',
+                                                  Image)
+    disp_image_sub = message_filters.Subscriber(
+        '/camera/disp/image_rect', Image)
+    ts = message_filters.TimeSynchronizer(
+        [camera_image_sub, disp_image_sub], 1)
+    ts.registerCallback(preprocess_road_callback,
+                        cv_bridge,
+                        None,  # get_gabor_filter_kernels(),
+                        udisp_road_filter_image_pub,
+                        vdisp_with_fitted_line_image_pub,
+                        line_fitted_road_image_pub,
+                        cloud_coloring_image_pub)
 
     rospy.spin()
