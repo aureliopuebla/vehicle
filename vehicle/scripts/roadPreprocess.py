@@ -8,31 +8,6 @@ import numpy as np
 import random
 import cv2
 
-# The following publications are for visualization only.
-PUBLISH_UDISPARITY_ROAD_FILTER = False
-PUBLISH_VDISPARITY_WITH_FITTED_LINE = False
-PUBLISH_LINE_FITTED_ROAD = False
-PUBLISH_CLOUD_COLORING = True
-
-# Road Line Fit Parameters
-# Note: Disparity values are uint16.
-MAX_DISPARITY = 16383
-HISTOGRAM_BINS = 256
-BIN_SIZE = (MAX_DISPARITY+1) / HISTOGRAM_BINS
-FLATNESS_THRESHOLD = 2
-RANSAC_TRIES = 1000
-RANSAC_EPSILON = 1
-ROAD_LINE_FIT_ALPHA = 0.20
-
-# Vanishing Point Detection Parameters
-VP_N = 4  # Implementation Specific
-VP_CANDIDATES_BOX_HEIGHT = 40
-VP_LAMBDA = 4 * np.sqrt(2)
-VP_KERNEL_SIZE = int(10 * VP_LAMBDA / np.pi) + 1  # Must be odd
-VP_W0 = 2 * np.pi / VP_LAMBDA
-VP_K = np.pi / 2
-VP_DELTA = -VP_W0**2 / (VP_K**2 * 8)
-
 
 def getHistogram(array):
     """Given an array [a0, a1, ...], return a histogram with 'HISTOGRAM_BINS'
@@ -59,7 +34,8 @@ def evaluateRANSACTry(VdispImage, m, b):
     f = 0
     for x in range(cols):
         y = int(m * x + b)
-        if y < 0 or y >= rows: break
+        if y < 0 or y >= rows:
+            break
         for yp in range(
                 max(0, y - RANSAC_EPSILON), min(rows, y + RANSAC_EPSILON)):
             f += VdispImage[yp][x]
@@ -83,7 +59,8 @@ def getRANSACFittedLine(VdispImage):
         x1 = idx1 - y1 * cols
         y2 = idx2 / cols
         x2 = idx2 - y2 * cols
-        if x1 == x2: continue  # Do not consider vertical lines
+        if x1 == x2:
+            continue  # Do not consider vertical lines
         m = float(y2 - y1) / (x2 - x1)
         b = y1 - m * x1
         f = evaluateRANSACTry(VdispImage, m, b)
@@ -101,7 +78,7 @@ def getRoadLineFitFilter(dispImage, m, b):
        that are close to the fitted road line."""
     rows, _ = dispImage.shape
     roadRowValues = np.fromfunction(
-        np.vectorize(lambda r, _: float(r - b) / m), (rows,1))
+        np.vectorize(lambda r, _: float(r - b) / m), (rows, 1))
     return np.abs(
         dispImage - roadRowValues) <= ROAD_LINE_FIT_ALPHA * roadRowValues
 
@@ -197,9 +174,9 @@ def getGaborFilterKernels():
                 a = xCosTheta + ySinTheta
                 b = -xSinTheta + yCosTheta
                 gaborKernels[y+VP_KERNEL_SIZE//2, x+VP_KERNEL_SIZE//2, i] = (
-                        VP_W0 / (np.sqrt(2 * np.pi) * VP_K) *
-                        np.exp(VP_DELTA * (4 * a**2 + b**2)) *
-                        (np.exp(1j * VP_W0 * a) - np.exp(-VP_K**2 / 2)))
+                    VP_W0 / (np.sqrt(2 * np.pi) * VP_K) *
+                    np.exp(VP_DELTA * (4 * a**2 + b**2)) *
+                    (np.exp(1j * VP_W0 * a) - np.exp(-VP_K**2 / 2)))
     np.save('gaborKernels.npy', gaborKernels)
     raise Exception('DONE')
     return gaborKernels
@@ -217,7 +194,8 @@ def listener():
         rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
         if PUBLISH_UDISPARITY_ROAD_FILTER else None)
     VdispWithFittedLineImagePub = (
-        rospy.Publisher('/camera/VdispWithFittedLine/image', Image, queue_size=1)
+        rospy.Publisher('/camera/VdispWithFittedLine/image',
+                        Image, queue_size=1)
         if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
     lineFittedRoadImagePub = (
         rospy.Publisher('/camera/lineFittedRoad/image', Image, queue_size=1)
@@ -233,7 +211,7 @@ def listener():
     ts = message_filters.TimeSynchronizer([cameraImageSub, dispImageSub], 1)
     ts.registerCallback(preprocessRoadCallback,
                         bridge,
-                        None, #getGaborFilterKernels(),
+                        None,  # getGaborFilterKernels(),
                         UdispRoadFilterImagePub,
                         VdispWithFittedLineImagePub,
                         lineFittedRoadImagePub,
@@ -243,4 +221,34 @@ def listener():
 
 
 if __name__ == '__main__':
+    # The following publications are for visualization only.
+    PUBLISH_UDISPARITY_ROAD_FILTER = rospy.get_param(
+        '~publish_udisparity_road_filter', False)
+    PUBLISH_VDISPARITY_WITH_FITTED_LINE = rospy.get_param(
+        '~publish_vdisparity_with_fitted_line', False)
+    PUBLISH_LINE_FITTED_ROAD = rospy.get_param(
+        '~publish_line_fitted_road', False)
+    PUBLISH_CLOUD_COLORING = rospy.get_param('~publish_cloud_coloring', False)
+
+    # Road Line Fit Parameters
+    # Note: Disparity values are uint16.
+    MAX_DISPARITY = rospy.get_param('~max_disparity', 16383)
+    HISTOGRAM_BINS = rospy.get_param('~histogram_bins', 256)
+    BIN_SIZE = (MAX_DISPARITY + 1) / HISTOGRAM_BINS
+    FLATNESS_THRESHOLD = rospy.get_param('~flatness_threshold', 2)
+    FIT_VDISP_LINE_RANSAC_PER_THREAD_TRIES = rospy.get_param(
+        '~fit_vdisp_line_ransac_per_thread_tries', 1000)
+    FIT_VDISP_LINE_RANSAC_EPSILON = rospy.get_param(
+        '~fit_vdisp_line_ransac_epsilon', 1)
+    ROAD_LINE_FIT_ALPHA = rospy.get_param('~road_line_fit_alpha', 0.20)
+
+    # Vanishing Point Detection Parameters
+    VP_N = 4  # Implementation Specific
+    VP_CANDIDATES_BOX_HEIGHT = 40
+    VP_LAMBDA = 4 * np.sqrt(2)
+    VP_KERNEL_SIZE = int(10 * VP_LAMBDA / np.pi) + 1  # Must be odd
+    VP_W0 = 2 * np.pi / VP_LAMBDA
+    VP_K = np.pi / 2
+    VP_DELTA = -VP_W0 ** 2 / (VP_K ** 2 * 8)
+
     listener()

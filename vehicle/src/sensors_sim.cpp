@@ -19,7 +19,7 @@
 #include <iomanip>
 #include <vector>
 
-#define DATA_DIR "/home/aurelio/KITTI Dataset/2011_09_26_drive_0091_sync/"
+#define DATA_DIR "/media/aurelio/Data/KITTI Dataset/2011_09_26_drive_0091_sync/"
 #define LEFT_DIR "image_02/data/"
 #define DISP_DIR "proj_depth/groundtruth/image_02/"
 #define OXTS_DIR "oxts/data/"
