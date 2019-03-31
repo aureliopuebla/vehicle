@@ -7,7 +7,7 @@ from cv_bridge import CvBridge
 import numpy as np
 import cv2
 
-from deprecated_fit_vdisp_line_ransac import *
+from deprecated_vdisp_line_ransac_fitter import *
 
 
 def getHistogram(array):
@@ -139,7 +139,7 @@ def getGaborFilterKernels():
 
 
 if __name__ == '__main__':
-    rospy.init_node('roadPreprocess', anonymous=False)
+    rospy.init_node('road_preprocessor', anonymous=False)
 
     # The following publications are for visualization only.
     PUBLISH_UDISPARITY_ROAD_FILTER = rospy.get_param(
