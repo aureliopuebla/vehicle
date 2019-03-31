@@ -7,4 +7,5 @@ Style Guides:
 
 Dependencies: 
 * ROS KINETIC
+* pyCuda
 * Mapviz (sudo apt-get install ros-$ROS_DISTRO-mapviz ros-$ROS_DISTRO-mapviz-plugins ros-$ROS_DISTRO-tile-map ros-$ROS_DISTRO-multires-image)

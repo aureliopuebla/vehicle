@@ -4,10 +4,12 @@ import message_filters
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+from string import Template
 import numpy as np
 import cv2
+import time
 
-from deprecated_vdisp_line_ransac_fitter import *
+CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME = 'vdisp_line_ransac_fitter.cu'
 
 
 def get_histogram(array):
@@ -37,6 +39,25 @@ def get_road_line_fit_filter(disp_image, m, b):
         np.vectorize(lambda r, _: float(r - b) / m), (rows, 1))
     return np.abs(
         disp_image - road_row_values) <= ROAD_LINE_FIT_ALPHA * road_row_values
+
+
+def get_ransac_fitted_vdisp_line(vdisp_image):
+    vdisp_image = vdisp_image.astype(np.int32)
+    rows, cols = vdisp_image.shape
+    cum_sum_array = np.cumsum(vdisp_image, dtype=np.int32)
+    N = cum_sum_array[-1]
+    m = np.empty(1, dtype=np.float32)
+    b = np.empty(1, dtype=np.float32)
+    getVdispLine(
+        cuda.In(vdisp_image),
+        np.int32(rows),
+        np.int32(cols),
+        cuda.In(cum_sum_array),
+        np.int32(N),
+        cuda.Out(m),
+        cuda.Out(b),
+        block=(CUDA_THREADS, 1, 1))
+    return m[0] / BIN_SIZE, b[0]
 
 
 def apply_gabor_kernels(camera_image, b, gabor_kernels):
@@ -124,13 +145,13 @@ def get_gabor_filter_kernels():
     for i in range(VP_N):
         theta = np.pi/2 + i*np.pi/VP_N
         for y in range(-VP_KERNEL_SIZE//2, VP_KERNEL_SIZE//2+1):
-            ySinTheta = y * np.sin(theta)
-            yCosTheta = y * np.cos(theta)
+            y_sin_theta = y * np.sin(theta)
+            y_cos_theta = y * np.cos(theta)
             for x in range(-VP_KERNEL_SIZE//2, VP_KERNEL_SIZE//2+1):
-                xCosTheta = x * np.cos(theta)
-                xSinTheta = x * np.sin(theta)
-                a = xCosTheta + ySinTheta
-                b = -xSinTheta + yCosTheta
+                x_cos_theta = x * np.cos(theta)
+                x_sin_theta = x * np.sin(theta)
+                a = x_cos_theta + y_sin_theta
+                b = -x_sin_theta + y_cos_theta
                 gabor_kernels[y+VP_KERNEL_SIZE//2, x+VP_KERNEL_SIZE//2, i] = (
                     VP_W0 / (np.sqrt(2 * np.pi) * VP_K) *
                     np.exp(VP_DELTA * (4 * a**2 + b**2)) *
@@ -140,6 +161,11 @@ def get_gabor_filter_kernels():
 
 if __name__ == '__main__':
     rospy.init_node('road_preprocessor', anonymous=False)
+
+    # CUDA_THREADS should be a power of 2
+    CUDA_THREADS = rospy.get_param('~cuda_threads', 1024)
+    USE_DEPRECATED_VDISP_LINE_RANSAC_FITTER = rospy.get_param(
+        '~use_deprecated_ransac_line_fitter', False)
 
     # The following publications are for visualization only.
     PUBLISH_UDISPARITY_ROAD_FILTER = rospy.get_param(
@@ -156,10 +182,10 @@ if __name__ == '__main__':
     HISTOGRAM_BINS = rospy.get_param('~histogram_bins', 256)
     BIN_SIZE = (MAX_DISPARITY + 1) / HISTOGRAM_BINS
     FLATNESS_THRESHOLD = rospy.get_param('~flatness_threshold', 2)
-    FIT_VDISP_LINE_RANSAC_PER_THREAD_TRIES = rospy.get_param(
-        '~fit_vdisp_line_ransac_per_thread_tries', 1000)
+    FIT_VDISP_LINE_RANSAC_TRIES_PER_THREAD = rospy.get_param(
+        '~fit_vdisp_line_ransac_tries_per_thread', 100)
     FIT_VDISP_LINE_RANSAC_EPSILON = rospy.get_param(
-        '~fit_vdisp_line_ransac_epsilon', 1)
+        '~fit_vdisp_line_ransac_epsilon', 2)
     ROAD_LINE_FIT_ALPHA = rospy.get_param('~road_line_fit_alpha', 0.20)
 
     # Vanishing Point Detection Parameters
@@ -171,19 +197,38 @@ if __name__ == '__main__':
     VP_K = np.pi / 2
     VP_DELTA = -VP_W0 ** 2 / (VP_K ** 2 * 8)
 
+    if USE_DEPRECATED_VDISP_LINE_RANSAC_FITTER:
+        # Overrides get_ransac_fitted_vdisp_line
+        from deprecated_vdisp_line_ransac_fitter import *
+    else:
+        import pycuda.driver as cuda
+        import pycuda.autoinit
+        from pycuda.compiler import SourceModule
+
+        f = open(CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME, 'r')
+        mod = SourceModule(Template(f.read()).substitute(
+            threads=CUDA_THREADS,
+            tries_per_thread=FIT_VDISP_LINE_RANSAC_TRIES_PER_THREAD,
+            ransac_epsilon=FIT_VDISP_LINE_RANSAC_EPSILON), no_extern_c=True)
+        f.close()
+
+        initKernels = mod.get_function('initKernels')
+        getVdispLine = mod.get_function('getVdispLine')
+        initKernels(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
+
     cv_bridge = CvBridge()
     udisp_road_filter_image_pub = (
-        rospy.Publisher('/camera/UdispRoadFilter/image', Image, queue_size=1)
+        rospy.Publisher('/camera/udisp_road_filter/image_rect', Image, queue_size=1)
         if PUBLISH_UDISPARITY_ROAD_FILTER else None)
     vdisp_with_fitted_line_image_pub = (
-        rospy.Publisher('/camera/VdispWithFittedLine/image',
+        rospy.Publisher('/camera/vdisp_with_fitted_line/image_rect',
                         Image, queue_size=1)
         if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
     line_fitted_road_image_pub = (
-        rospy.Publisher('/camera/lineFittedRoad/image', Image, queue_size=1)
+        rospy.Publisher('/camera/line_fitted_road/image_rect', Image, queue_size=1)
         if PUBLISH_LINE_FITTED_ROAD else None)
     cloud_coloring_image_pub = (
-        rospy.Publisher('/camera/cloudColoring/image', Image, queue_size=1)
+        rospy.Publisher('/camera/cloud_coloring/image_rect', Image, queue_size=1)
         if PUBLISH_CLOUD_COLORING else None)
     # TODO: Publish roadLinePub and vanishingPointPub.
 

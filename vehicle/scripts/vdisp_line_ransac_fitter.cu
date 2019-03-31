@@ -1,13 +1,13 @@
 #include <curand_kernel.h>
 
-#define THREADS 1024
-#define TRIES_PER_THREAD 100
-#define RANSAC_EPSILON 2
+#define THREADS ${threads}
+#define TRIES_PER_THREAD ${tries_per_thread}
+#define RANSAC_EPSILON ${ransac_epsilon}
 
 __device__ curandState_t* g_states[THREADS];
 
 extern "C" {
-__global__ void initkernels(int seed)
+__global__ void initKernels(int seed)
 {
   int tid = threadIdx.x;
   curandState_t* s = new curandState_t;

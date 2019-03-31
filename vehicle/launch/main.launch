@@ -2,7 +2,8 @@
   <include file="$(find carbot_description)/launch/carbot_description.launch"/>
   <node pkg="vehicle" type="sensors_sim" name="sensors_sim_node" respawn="true"/>
   <node pkg="vehicle" type="road_preprocessor.py" name="road_preprocessor_node"
-        respawn="true">
+        cwd="node" respawn="true">
+    <param name="use_deprecated_ransac_line_fitter" type="bool" value="True"/>
     <param name="publish_vdisparity_with_fitted_line" type="bool" value="True"/>
     <param name="publish_cloud_coloring" type="bool" value="True"/>
   </node>
