@@ -15,7 +15,8 @@ CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME = 'vdisp_line_ransac_fitter.cu'
 def get_histogram(array):
     """Given an array [a0, a1, ...], return a histogram with 'HISTOGRAM_BINS'
        bins in range 0 to MAX_DISPARITY. Values out of range are ignored."""
-    return np.histogram(array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
+    return np.histogram(
+        array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
 
 
 def get_udisp_thresshold_filter(disp_image):
@@ -27,7 +28,7 @@ def get_udisp_thresshold_filter(disp_image):
        column 'c'."""
     rows, cols = disp_image.shape
     udisp_image = np.apply_along_axis(get_histogram, 0, disp_image)
-    return udisp_image[np.minimum(HISTOGRAM_BINS-1, disp_image / BIN_SIZE),
+    return udisp_image[np.minimum(HISTOGRAM_BINS - 1, disp_image / BIN_SIZE),
                        np.mgrid[0:rows, 0:cols][1]] < FLATNESS_THRESHOLD
 
 
@@ -42,6 +43,9 @@ def get_road_line_fit_filter(disp_image, m, b):
 
 
 def get_ransac_fitted_vdisp_line(vdisp_image):
+    # TODO: Make ctx an input parameter once deprecated_vdisp_line_ransac is
+    # removed.
+    _ctx.push()
     vdisp_image = vdisp_image.astype(np.int32)
     rows, cols = vdisp_image.shape
     cum_sum_array = np.cumsum(vdisp_image, dtype=np.int32)
@@ -104,16 +108,16 @@ def preprocess_road_callback(camera_image_msg,
     if udisp_road_filter_image_pub is not None:
         # Convert Binary Image to uint8.
         udisp_road_filter_image_pub.publish(cv_bridge.cv2_to_imgmsg(
-            udisp_filter.astype('uint8')*255, encoding='8UC1'))
+            udisp_filter.astype('uint8') * 255, encoding='8UC1'))
 
     if vdisp_with_fitted_line_image_pub is not None:
         # Show elements with values > 0.
-        vdisp_image = vdisp_image.astype('uint8')*255
+        vdisp_image = vdisp_image.astype('uint8') * 255
         vdisp_with_fitted_line = cv2.cvtColor(vdisp_image, cv2.COLOR_GRAY2RGB)
         _, cols = vdisp_image.shape
         cv2.line(vdisp_with_fitted_line,
                  (0, int(b)),
-                 (cols-1, int((cols-1) * (m*BIN_SIZE) + b)),
+                 (cols - 1, int((cols - 1) * (m * BIN_SIZE) + b)),
                  (0, 0, 255),
                  2)
         vdisp_with_fitted_line_image_pub.publish(
@@ -143,16 +147,16 @@ def get_gabor_filter_kernels():
     gabor_kernels = np.zeros(
         (VP_KERNEL_SIZE, VP_KERNEL_SIZE, VP_N), dtype=np.complex128)
     for i in range(VP_N):
-        theta = np.pi/2 + i*np.pi/VP_N
-        for y in range(-VP_KERNEL_SIZE//2, VP_KERNEL_SIZE//2+1):
+        theta = np.pi / 2 + i * np.pi / VP_N
+        for y in range(-VP_KERNEL_SIZE // 2, VP_KERNEL_SIZE // 2 + 1):
             y_sin_theta = y * np.sin(theta)
             y_cos_theta = y * np.cos(theta)
-            for x in range(-VP_KERNEL_SIZE//2, VP_KERNEL_SIZE//2+1):
+            for x in range(-VP_KERNEL_SIZE // 2, VP_KERNEL_SIZE // 2 + 1):
                 x_cos_theta = x * np.cos(theta)
                 x_sin_theta = x * np.sin(theta)
                 a = x_cos_theta + y_sin_theta
                 b = -x_sin_theta + y_cos_theta
-                gabor_kernels[y+VP_KERNEL_SIZE//2, x+VP_KERNEL_SIZE//2, i] = (
+                gabor_kernels[y + VP_KERNEL_SIZE // 2, x + VP_KERNEL_SIZE // 2, i] = (
                     VP_W0 / (np.sqrt(2 * np.pi) * VP_K) *
                     np.exp(VP_DELTA * (4 * a**2 + b**2)) *
                     (np.exp(1j * VP_W0 * a) - np.exp(-VP_K**2 / 2)))
@@ -202,16 +206,19 @@ if __name__ == '__main__':
         from deprecated_vdisp_line_ransac_fitter import *
     else:
         import pycuda.driver as cuda
-        import pycuda.autoinit
         from pycuda.compiler import SourceModule
 
-        f = open(CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME, 'r')
-        mod = SourceModule(Template(f.read()).substitute(
-            threads=CUDA_THREADS,
-            tries_per_thread=FIT_VDISP_LINE_RANSAC_TRIES_PER_THREAD,
-            ransac_epsilon=FIT_VDISP_LINE_RANSAC_EPSILON), no_extern_c=True)
-        f.close()
-
+        cuda.init()
+        dev = cuda.Device(0)
+        _ctx = dev.make_context()
+        with open(CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME, 'r') as f:
+            mod = SourceModule(
+                Template(
+                    f.read()).substitute(
+                    threads=CUDA_THREADS,
+                    tries_per_thread=FIT_VDISP_LINE_RANSAC_TRIES_PER_THREAD,
+                    ransac_epsilon=FIT_VDISP_LINE_RANSAC_EPSILON),
+                no_extern_c=True)
         initKernels = mod.get_function('initKernels')
         getVdispLine = mod.get_function('getVdispLine')
         initKernels(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
@@ -233,7 +240,7 @@ if __name__ == '__main__':
         rospy.Publisher('/camera/cloud_coloring/image_rect',
                         Image, queue_size=1)
         if PUBLISH_CLOUD_COLORING else None)
-    # TODO: Publish roadLinePub and vanishingPointPub.
+    # TODO: Publish vdisp_line_pub and vanishing_point_pub.
 
     camera_image_sub = message_filters.Subscriber('/camera/left/image_rect',
                                                   Image)
