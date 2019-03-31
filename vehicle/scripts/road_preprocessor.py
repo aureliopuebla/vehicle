@@ -218,17 +218,20 @@ if __name__ == '__main__':
 
     cv_bridge = CvBridge()
     udisp_road_filter_image_pub = (
-        rospy.Publisher('/camera/udisp_road_filter/image_rect', Image, queue_size=1)
+        rospy.Publisher('/camera/udisp_road_filter/image_rect',
+                        Image, queue_size=1)
         if PUBLISH_UDISPARITY_ROAD_FILTER else None)
     vdisp_with_fitted_line_image_pub = (
         rospy.Publisher('/camera/vdisp_with_fitted_line/image_rect',
                         Image, queue_size=1)
         if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
     line_fitted_road_image_pub = (
-        rospy.Publisher('/camera/line_fitted_road/image_rect', Image, queue_size=1)
+        rospy.Publisher('/camera/line_fitted_road/image_rect',
+                        Image, queue_size=1)
         if PUBLISH_LINE_FITTED_ROAD else None)
     cloud_coloring_image_pub = (
-        rospy.Publisher('/camera/cloud_coloring/image_rect', Image, queue_size=1)
+        rospy.Publisher('/camera/cloud_coloring/image_rect',
+                        Image, queue_size=1)
         if PUBLISH_CLOUD_COLORING else None)
     # TODO: Publish roadLinePub and vanishingPointPub.
 
