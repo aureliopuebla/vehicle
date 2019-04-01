@@ -4,6 +4,8 @@ import message_filters
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+from vehicle.msg import VdispLine
+
 from string import Template
 import numpy as np
 import cv2
@@ -74,6 +76,7 @@ def preprocess_road_callback(camera_image_msg,
                              disp_image_msg,
                              cv_bridge,
                              unused_gabor_kernels,
+                             vdisp_line_pub,
                              udisp_road_filter_image_pub=None,
                              vdisp_with_fitted_line_image_pub=None,
                              line_fitted_road_image_pub=None,
@@ -84,6 +87,7 @@ def preprocess_road_callback(camera_image_msg,
       camera_image_msg: A ROS Message containing the color Road Image.
       disp_image_msg: A ROS Message containing the corresponding disparity Image.
       cv_bridge: The CV bridge instance used to convert CV images and ROS Messages.
+      vdisp_line_pub: The TOS Publisher for the Vdisp fitted line.
       udisp_road_filter_image_pub: If set, it's the ROS Publisher that will contain
         the UDisparity Filter for visualization.
       vdisp_with_fitted_line_image_pub: If set, it's the ROS Publisher that will
@@ -105,6 +109,8 @@ def preprocess_road_callback(camera_image_msg,
     m, b = get_ransac_fitted_vdisp_line(vdisp_image)
     line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
     # applyGaborKernels(cameraImage, b, *gaborKernels)
+
+    vdisp_line_pub.publish(VdispLine(header=camera_image_msg.header, m=m, b=b))
 
     if udisp_road_filter_image_pub is not None:
         # Convert Binary Image to uint8.
@@ -225,6 +231,9 @@ if __name__ == '__main__':
         initKernels(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
 
     cv_bridge = CvBridge()
+    vdisp_line_pub = rospy.Publisher(
+        '/camera/vdisp_line', VdispLine, queue_size=1)
+    # TODO: Publish vanishing_point_pub.
     udisp_road_filter_image_pub = (
         rospy.Publisher('/camera/udisp_road_filter/image_rect',
                         Image, queue_size=1)
@@ -241,7 +250,6 @@ if __name__ == '__main__':
         rospy.Publisher('/camera/cloud_coloring/image_rect',
                         Image, queue_size=1)
         if PUBLISH_CLOUD_COLORING else None)
-    # TODO: Publish vdisp_line_pub and vanishing_point_pub.
 
     camera_image_sub = message_filters.Subscriber('/camera/left/image_rect',
                                                   Image)
@@ -252,6 +260,7 @@ if __name__ == '__main__':
     ts.registerCallback(preprocess_road_callback,
                         cv_bridge,
                         None,  # get_gabor_filter_kernels(),
+                        vdisp_line_pub,
                         udisp_road_filter_image_pub,
                         vdisp_with_fitted_line_image_pub,
                         line_fitted_road_image_pub,
