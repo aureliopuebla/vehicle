@@ -3,6 +3,7 @@
 #define THREADS ${threads}
 #define TRIES_PER_THREAD ${tries_per_thread}
 #define RANSAC_EPSILON ${ransac_epsilon}
+#define RANSAC_EPSILON_DECAY ${ransac_epsilon_decay}
 
 __device__ curandState_t* g_states[THREADS];
 
@@ -84,7 +85,7 @@ __global__ void getVdispLine(int* vdisp_image, int rows, int cols, int* vdisp_cu
       if (y < 0 || y >= rows)
         break;
       for (int yp = max(0, y - RANSAC_EPSILON); yp <= min(rows - 1, y + RANSAC_EPSILON); yp++)
-        f += vdisp_image[yp * cols + x];
+        f += vdisp_image[yp * cols + x] * pow(1 - RANSAC_EPSILON_DECAY, abs(yp - y));
     }
 
     if (f > best_f)

@@ -173,7 +173,7 @@ def get_gabor_filter_kernels():
 if __name__ == '__main__':
     rospy.init_node('road_preprocessor', anonymous=False)
 
-    # CUDA_THREADS should be a power of 2
+    # CUDA_THREADS should be a power of 2.
     CUDA_THREADS = rospy.get_param('~cuda_threads', 1024)
     USE_DEPRECATED_VDISP_LINE_RANSAC_FITTER = rospy.get_param(
         '~use_deprecated_ransac_line_fitter', False)
@@ -197,6 +197,8 @@ if __name__ == '__main__':
         '~fit_vdisp_line_ransac_tries_per_thread', 100)
     FIT_VDISP_LINE_RANSAC_EPSILON = rospy.get_param(
         '~fit_vdisp_line_ransac_epsilon', 2)
+    FIT_VDISP_LINE_RANSAC_EPSILON_DECAY = rospy.get_param(
+        '~fit_vdisp_line_ransac_epsilon_decay', 0.2)
     ROAD_LINE_FIT_ALPHA = rospy.get_param('~road_line_fit_alpha', 0.20)
 
     # Vanishing Point Detection Parameters
@@ -209,7 +211,7 @@ if __name__ == '__main__':
     VP_DELTA = -VP_W0 ** 2 / (VP_K ** 2 * 8)
 
     if USE_DEPRECATED_VDISP_LINE_RANSAC_FITTER:
-        # Overrides get_ransac_fitted_vdisp_line
+        # Overrides get_ransac_fitted_vdisp_line.
         from deprecated_vdisp_line_ransac_fitter import *
     else:
         import pycuda.driver as cuda
@@ -224,7 +226,8 @@ if __name__ == '__main__':
                     f.read()).substitute(
                     threads=CUDA_THREADS,
                     tries_per_thread=FIT_VDISP_LINE_RANSAC_TRIES_PER_THREAD,
-                    ransac_epsilon=FIT_VDISP_LINE_RANSAC_EPSILON),
+                    ransac_epsilon=FIT_VDISP_LINE_RANSAC_EPSILON,
+                    ransac_epsilon_decay=FIT_VDISP_LINE_RANSAC_EPSILON_DECAY),
                 no_extern_c=True)
         initKernels = mod.get_function('initKernels')
         getVdispLine = mod.get_function('getVdispLine')
