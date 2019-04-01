@@ -78,15 +78,20 @@ __global__ void getVdispLine(int* vdisp_image, int rows, int cols, int* vdisp_cu
     float m = float(y2 - y1) / (x2 - x1);
     float b = y1 - m * x1;
 
-    float f = 0.0;
+    float fs[RANSAC_EPSILON + 1];
+    for (int yp = 0; yp <= RANSAC_EPSILON; yp++)
+        fs[yp] = 0.0;
     for (int x = 0; x < cols; x++)
     {
       int y = m * x + b;
       if (y < 0 || y >= rows)
         break;
       for (int yp = max(0, y - RANSAC_EPSILON); yp <= min(rows - 1, y + RANSAC_EPSILON); yp++)
-        f += vdisp_image[yp * cols + x] * pow(1 - RANSAC_EPSILON_DECAY, abs(yp - y));
+        fs[abs(yp - y)] += vdisp_image[yp * cols + x];
     }
+    float f = 0.0;
+    for (int yp = 0; yp <= RANSAC_EPSILON; yp++)
+        f += fs[yp] * pow(1 - RANSAC_EPSILON_DECAY, yp);
 
     if (f > best_f)
     {

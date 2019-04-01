@@ -96,15 +96,15 @@ def preprocess_road_callback(camera_image_msg,
         the Line Fitted Road Image with horizon line for visualization.
       cloud_coloring_image_pub: If set, it-s the ROS Publisher that contains the
         corresponding colors for the point cloud based on a color code where
-        RED are obstacles and BLUE is the detected road.
+        YELLOW are obstacles and WHITE is the detected road.
     """
     disp_image = cv_bridge.imgmsg_to_cv2(
         disp_image_msg, desired_encoding='passthrough')
     camera_image = cv_bridge.imgmsg_to_cv2(
         camera_image_msg, desired_encoding='passthrough')
 
-    udisp_filter = get_udisp_thresshold_filter(disp_image)
-    vdisp_image = np.apply_along_axis(
+    udisp_filter = get_udisp_thresshold_filter(disp_image)  # TODO(P1): CUDA
+    vdisp_image = np.apply_along_axis(  # TODO(P0): CUDA
         get_histogram, 1, disp_image * udisp_filter)
     m, b = get_ransac_fitted_vdisp_line(vdisp_image)
     line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     FIT_VDISP_LINE_RANSAC_EPSILON = rospy.get_param(
         '~fit_vdisp_line_ransac_epsilon', 2)
     FIT_VDISP_LINE_RANSAC_EPSILON_DECAY = rospy.get_param(
-        '~fit_vdisp_line_ransac_epsilon_decay', 0.2)
+        '~fit_vdisp_line_ransac_epsilon_decay', 0.22)
     ROAD_LINE_FIT_ALPHA = rospy.get_param('~road_line_fit_alpha', 0.20)
 
     # Vanishing Point Detection Parameters
