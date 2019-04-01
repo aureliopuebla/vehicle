@@ -1,5 +1,5 @@
 Header header
 
-# The x, y coordinates of the vanishing point.
-uint32 x
-uint32 y
+# The row, col coordinates of the vanishing point.
+uint32 row
+uint32 col
