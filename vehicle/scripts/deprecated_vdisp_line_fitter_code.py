@@ -3,7 +3,7 @@ import numpy as np
 
 # To be used only with this parameters for the presentation.
 # Afterwards, this file will be deleted.
-MAX_DISPARITY = 16383
+MAX_DISPARITY = 4096
 HISTOGRAM_BINS = 256
 BIN_SIZE = (MAX_DISPARITY + 1) / HISTOGRAM_BINS
 FLATNESS_THRESHOLD = 16

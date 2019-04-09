@@ -102,7 +102,8 @@ def get_vdisp_line_callback(color_image_msg,
         color_image_msg, desired_encoding='passthrough')
 
     if USE_DEPRECATED_CODE:
-        udisp_image = np.apply_along_axis(deprecated.get_histogram, 0, disp_image)
+        udisp_image = np.apply_along_axis(
+            deprecated.get_histogram, 0, disp_image)
         udisp_filter = get_udisp_threshold_filter(disp_image, udisp_image)
         vdisp_image = np.apply_along_axis(
             deprecated.get_histogram, 1, disp_image * udisp_filter)
@@ -110,7 +111,6 @@ def get_vdisp_line_callback(color_image_msg,
         line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
     else:
         cuda_context.push()
-
 
     vdisp_line_pub.publish(VdispLine(header=disp_image_msg.header, m=m, b=b))
 
@@ -161,12 +161,12 @@ if __name__ == '__main__':
 
     # The following publications are for debugging and visualization only as
     # they severely slow down node execution.
-    PUBLISH_UDISPARITY_THRESHOLD_FILTER = rospy.get_param(
-        '~publish_udisparity_threshold_filter', False)
-    PUBLISH_VDISPARITY_WITH_FITTED_LINE = rospy.get_param(
-        '~publish_vdisparity_with_fitted_line', False)
-    PUBLISH_LINE_FITTED_ROAD = rospy.get_param(
-        '~publish_line_fitted_road', False)
+    PUBLISH_UDISP_THRESHOLD_FILTER = rospy.get_param(
+        '~publish_udisp_threshold_filter', False)
+    PUBLISH_VDISP_WITH_FITTED_LINE = rospy.get_param(
+        '~publish_vdisp_with_fitted_line', False)
+    PUBLISH_VDISP_LINE_FITTED_ROAD = rospy.get_param(
+        '~publish_vdisp_line_fitted_road', False)
     PUBLISH_CLOUD_COLORING = rospy.get_param('~publish_cloud_coloring', False)
 
     # Vdisp Line Fitting Parameters
@@ -201,31 +201,25 @@ if __name__ == '__main__':
         initRandomStates(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
 
     cv_bridge = CvBridge()
-    vdisp_line_pub = rospy.Publisher(
-        '/camera/vdisp_line', VdispLine, queue_size=1)
+    vdisp_line_pub = rospy.Publisher('vdisp_line', VdispLine, queue_size=1)
     udisp_threshold_filter_image_pub = (
-        rospy.Publisher('/camera/udisp_threshold_filter/image_rect',
-                        Image, queue_size=1)
-        if PUBLISH_UDISPARITY_THRESHOLD_FILTER else None)
+        rospy.Publisher('udisp_threshold_filter_image', Image, queue_size=1)
+        if PUBLISH_UDISP_THRESHOLD_FILTER else None)
     vdisp_with_fitted_line_image_pub = (
-        rospy.Publisher('/camera/vdisp_with_fitted_line/image_rect',
-                        Image, queue_size=1)
-        if PUBLISH_VDISPARITY_WITH_FITTED_LINE else None)
+        rospy.Publisher('vdisp_with_fitted_line_image', Image, queue_size=1)
+        if PUBLISH_VDISP_WITH_FITTED_LINE else None)
     line_fitted_road_image_pub = (
-        rospy.Publisher('/camera/line_fitted_road/image_rect',
-                        Image, queue_size=1)
-        if PUBLISH_LINE_FITTED_ROAD else None)
+        rospy.Publisher('vdisp_line_fitted_road_image', Image, queue_size=1)
+        if PUBLISH_VDISP_LINE_FITTED_ROAD else None)
     cloud_coloring_image_pub = (
-        rospy.Publisher('/camera/cloud_coloring/image_rect',
-                        Image, queue_size=1)
+        rospy.Publisher('cloud_coloring_image', Image, queue_size=1)
         if PUBLISH_CLOUD_COLORING else None)
 
-    color_image_sub = message_filters.Subscriber('/multisense/left/image_rect_color',
-                                                  Image)
+    color_image_sub = message_filters.Subscriber(
+        '/multisense/left/image_rect_color', Image)
     disp_image_sub = message_filters.Subscriber(
         '/multisense/left/disparity', Image)
-    ts = message_filters.TimeSynchronizer(
-        [color_image_sub, disp_image_sub], 1)
+    ts = message_filters.TimeSynchronizer([color_image_sub, disp_image_sub], 1)
     ts.registerCallback(get_vdisp_line_callback,
                         cv_bridge,
                         None if USE_DEPRECATED_CODE else cuda_context,

@@ -2,17 +2,17 @@
     <include file="$(find carbot_description)/launch/carbot_description.launch"/>
 
 
-    <node pkg="rosbag" type="play" name="play_node" output="screen"
-        args="-l '/media/aurelio/Data/TEC Recordings/TEC_2019-04-03-17-35-59.bag'"/>
+    <node pkg="rosbag" type="play" name="play_node" output="log"
+        args="--clock -l '/media/aurelio/Data/TEC Recordings/TEC_2019-04-03-17-35-59.bag'"/>
 
     <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui_node"/>
 
     <node pkg="vehicle" type="vdisp_line_fitter.py" name="vdisp_line_fitter_node"
-        cwd="node" respawn="true">
+        ns="vdisp_line_fitter" cwd="node" respawn="true">
         <param name="use_deprecated_code" type="bool" value="True"/>
-        <param name="publish_udisparity_threshold_filter" type="bool" value="True"/>
-        <param name="publish_vdisparity_with_fitted_line" type="bool" value="True"/>
-        <param name="publish_line_fitted_road" type="bool" value="True"/>
+        <param name="publish_udisp_threshold_filter" type="bool" value="True"/>
+        <param name="publish_vdisp_with_fitted_line" type="bool" value="True"/>
+        <param name="publish_vdisp_line_fitted_road" type="bool" value="True"/>
         <param name="publish_cloud_coloring" type="bool" value="True"/>
     </node>
 
