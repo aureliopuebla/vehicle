@@ -3,13 +3,22 @@ import numpy as np
 
 # To be used only with this parameters for the presentation.
 # Afterwards, this file will be deleted.
-RANSAC_TRIES = 2000
-RANSAC_EPSILON = 1
 MAX_DISPARITY = 16383
 HISTOGRAM_BINS = 256
 BIN_SIZE = (MAX_DISPARITY + 1) / HISTOGRAM_BINS
+FLATNESS_THRESHOLD = 16
+
+RANSAC_TRIES = 2000
+RANSAC_EPSILON = 1
 bestM = 0.0
 bestB = 0.0
+
+
+def get_histogram(array):
+    """Given an array [a0, a1, ...], return a histogram with 'HISTOGRAM_BINS'
+       bins in range 0 to MAX_DISPARITY. Values out of range are ignored."""
+    return np.histogram(
+        array, bins=HISTOGRAM_BINS, range=(0, MAX_DISPARITY))[0]
 
 
 def evaluate_ransac_try(VdispImage, m, b):

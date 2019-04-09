@@ -12,7 +12,7 @@ extern "C" {
  * Initializes the random states for all threads that will execute RANSAC tries.
  * @param seed The random seed to use. It's recommended setting it to unix time.
  */
-__global__ void initKernels(int seed)
+__global__ void initRandomStates(int seed)
 {
   int tid = threadIdx.x;
   curandState_t* s = new curandState_t;

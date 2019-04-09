@@ -1,11 +1,21 @@
 <launch>
-  <include file="$(find carbot_description)/launch/carbot_description.launch"/>
-  <node pkg="vehicle" type="sensors_sim" name="sensors_sim_node" respawn="true"/>
-  <node pkg="vehicle" type="road_preprocessor.py" name="road_preprocessor_node"
+    <include file="$(find carbot_description)/launch/carbot_description.launch"/>
+
+
+    <node pkg="rosbag" type="play" name="play_node" output="screen"
+        args="-l '/media/aurelio/Data/TEC Recordings/TEC_2019-04-03-17-35-59.bag'"/>
+
+    <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui_node"/>
+
+    <node pkg="vehicle" type="vdisp_line_fitter.py" name="vdisp_line_fitter_node"
         cwd="node" respawn="true">
-    <param name="publish_vdisparity_with_fitted_line" type="bool" value="True"/>
-    <param name="publish_cloud_coloring" type="bool" value="True"/>
-  </node>
+        <param name="use_deprecated_code" type="bool" value="True"/>
+        <param name="publish_udisparity_threshold_filter" type="bool" value="True"/>
+        <param name="publish_vdisparity_with_fitted_line" type="bool" value="True"/>
+        <param name="publish_line_fitted_road" type="bool" value="True"/>
+        <param name="publish_cloud_coloring" type="bool" value="True"/>
+    </node>
+
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
         cwd="node" respawn="true"/> -->
 
@@ -16,8 +26,8 @@
     <remap from="fix" to="oxts/gps"/>
   </node> -->
 
-  <node pkg="rviz" name="rviz" type="rviz"
-        args="-d $(find vehicle)/config/main.rviz"/>
+  <!-- <node pkg="rviz" name="rviz" type="rviz"
+        args="-d $(find vehicle)/config/main.rviz"/> -->
   <!-- <node pkg="mapviz" type="mapviz" name="mapviz">
      <param name="config" value="$(find vehicle)/config/main.mvc"/>
   </node> -->
