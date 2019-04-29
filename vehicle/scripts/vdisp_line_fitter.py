@@ -111,10 +111,25 @@ def get_vdisp_line_callback(color_image_msg,
         line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
     else:
         cuda_context.push()
+        disp_image = disp_image.astype(np.int32)
+        rows, cols = disp_image.shape
 
-    vdisp_line_pub.publish(VdispLine(header=disp_image_msg.header, m=m, b=b))
+        disp_image_gpu = cuda.mem_alloc(disp_image.nbytes)
+        udisp_image_gpu = cuda.mem_alloc(4 * HISTOGRAM_BINS * cols)
+
+        cuda.memcpy_htod(disp_image_gpu, disp_image)
+        getUDisparity(
+            disp_image_gpu, np.int32(rows), np.int32(cols),
+            udisp_image_gpu, np.int32(HISTOGRAM_BINS), np.int32(BIN_SIZE),
+            block=(cols, 1, 1))
+
+    # vdisp_line_pub.publish(VdispLine(header=disp_image_msg.header, m=m, b=b))
 
     if udisp_threshold_filter_image_pub is not None:
+        if not USE_DEPRECATED_CODE:
+            udisp_image = np.empty((HISTOGRAM_BINS, cols), np.int32)
+            cuda.memcpy_dtoh(udisp_image, udisp_image_gpu)
+            udisp_filter = get_udisp_threshold_filter(disp_image, udisp_image)
         # Convert Binary Image to uint8.
         udisp_threshold_filter_image_pub.publish(cv_bridge.cv2_to_imgmsg(
             udisp_filter.astype('uint8') * 255, encoding='8UC1'))
@@ -197,6 +212,7 @@ if __name__ == '__main__':
                     ransac_epsilon_decay=FIT_VDISP_LINE_RANSAC_EPSILON_DECAY),
                 no_extern_c=True)
         initRandomStates = mod.get_function('initRandomStates')
+        getUDisparity = mod.get_function('getUDisparity')
         getVdispLine = mod.get_function('getVdispLine')
         initRandomStates(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
 
