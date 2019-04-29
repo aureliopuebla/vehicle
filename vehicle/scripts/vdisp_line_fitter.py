@@ -38,20 +38,15 @@ def get_road_line_fit_filter(disp_image, m, b):
         disp_image - road_row_values) <= ROAD_LINE_FIT_ALPHA * road_row_values
 
 
-def get_ransac_fitted_vdisp_line(vdisp_image):
+def get_ransac_fitted_vdisp_line(vdisp_image_gpu, rows, bins, vdisp_cum_sum_array_gpu):
     """Gets the vdisp_line using RANSAC running on CUDA."""
-    vdisp_image = vdisp_image.astype(np.int32)
-    rows, cols = vdisp_image.shape
-    cum_sum_array = np.cumsum(vdisp_image, dtype=np.int32)
-    N = cum_sum_array[-1]
     m = np.empty(1, dtype=np.float32)
     b = np.empty(1, dtype=np.float32)
     getVdispLine(
-        cuda.In(vdisp_image),
+        vdisp_image_gpu,
         np.int32(rows),
-        np.int32(cols),
-        cuda.In(cum_sum_array),
-        np.int32(N),
+        np.int32(bins),
+        vdisp_cum_sum_array_gpu,
         cuda.Out(m),
         cuda.Out(b),
         block=(CUDA_THREADS, 1, 1))
@@ -108,7 +103,7 @@ def get_vdisp_line_callback(color_image_msg,
         vdisp_image = np.apply_along_axis(
             deprecated.get_histogram, 1, disp_image * udisp_filter)
         m, b = deprecated.get_ransac_fitted_vdisp_line(vdisp_image)
-        line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
+
     else:
         cuda_context.push()
         disp_image = disp_image.astype(np.int32)
@@ -118,6 +113,8 @@ def get_vdisp_line_callback(color_image_msg,
         udisp_image_gpu = cuda.mem_alloc(
             np.int32().itemsize * HISTOGRAM_BINS * cols)
         vdisp_image_gpu = cuda.mem_alloc(
+            np.int32().itemsize * rows * HISTOGRAM_BINS)
+        vdisp_cum_sum_array_gpu = cuda.mem_alloc(
             np.int32().itemsize * rows * HISTOGRAM_BINS)
 
         cuda.memcpy_htod(disp_image_gpu, disp_image)
@@ -130,8 +127,13 @@ def get_vdisp_line_callback(color_image_msg,
             udisp_image_gpu, np.int32(FLATNESS_THRESHOLD),
             vdisp_image_gpu, np.int32(HISTOGRAM_BINS), np.int32(BIN_SIZE),
             block=(rows, 1, 1))
+        getCumSumArray(
+            vdisp_image_gpu, vdisp_cum_sum_array_gpu, np.int32(rows * HISTOGRAM_BINS),
+            block=(CUDA_THREADS, 1, 1))
+        m, b = get_ransac_fitted_vdisp_line(
+            vdisp_image_gpu, rows, HISTOGRAM_BINS, vdisp_cum_sum_array_gpu)
 
-    # vdisp_line_pub.publish(VdispLine(header=disp_image_msg.header, m=m, b=b))
+    vdisp_line_pub.publish(VdispLine(header=disp_image_msg.header, m=m, b=b))
 
     if udisp_threshold_filter_image_pub is not None:
         if not USE_DEPRECATED_CODE:
@@ -150,15 +152,16 @@ def get_vdisp_line_callback(color_image_msg,
         vdisp_image = vdisp_image.astype('uint8') * 255
         vdisp_with_fitted_line = cv2.cvtColor(vdisp_image, cv2.COLOR_GRAY2RGB)
         _, cols = vdisp_image.shape
-        #cv2.line(vdisp_with_fitted_line,
-        #         (0, int(b)),
-        #         (cols - 1, int((cols - 1) * (m * BIN_SIZE) + b)),
-        #         (0, 0, 255),
-        #         2)
+        cv2.line(vdisp_with_fitted_line,
+                 (0, int(b)),
+                 (cols - 1, int((cols - 1) * (m * BIN_SIZE) + b)),
+                 (0, 0, 255),
+                 2)
         vdisp_with_fitted_line_image_pub.publish(
             cv_bridge.cv2_to_imgmsg(vdisp_with_fitted_line, encoding='bgr8'))
 
     if line_fitted_road_image_pub is not None:
+        line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
         line_fitted_road = (
             color_image * line_fitted_road_filter[:, :, np.newaxis])
         cv2.line(line_fitted_road,
@@ -170,6 +173,7 @@ def get_vdisp_line_callback(color_image_msg,
             cv_bridge.cv2_to_imgmsg(line_fitted_road, encoding='bgr8'))
 
     if cloud_coloring_image_pub is not None:
+        line_fitted_road_filter = get_road_line_fit_filter(disp_image, m, b)
         cloud_coloring = 255 * np.ones(color_image.shape, np.uint8)
         cloud_coloring[:, :, 0:1] *= line_fitted_road_filter[:, :, np.newaxis]
         cloud_coloring_image_msg = cv_bridge.cv2_to_imgmsg(
@@ -225,6 +229,7 @@ if __name__ == '__main__':
         initRandomStates = mod.get_function('initRandomStates')
         getUDisparity = mod.get_function('getUDisparity')
         getVDisparity = mod.get_function('getVDisparity')
+        getCumSumArray = mod.get_function('getCumSumArray')
         getVdispLine = mod.get_function('getVdispLine')
         initRandomStates(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
 

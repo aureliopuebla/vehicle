@@ -25,7 +25,7 @@ __global__ void initRandomStates(int seed)
 
 /**
  * Gets the udisp_image from the disp_image given the bins and bin_size for the histograms.
- * It assumes that a number of threads equal to 'cols' are launched.
+ * Assumes that a number of threads equal to 'cols' are launched.
  * @param disp_image The original disparity image.
  * @param rows The number of rows in 'disp_image'.
  * @param cols The number of cols in 'disp_image' and thus in 'udisp_image'.
@@ -49,7 +49,7 @@ __global__ void getUDisparity(int* disp_image, int rows, int cols, int* udisp_im
 /**
  * Gets the vdisp_image from the disp_image given the bins and bin_size for the histograms.
  * It only considers disparity values whose corresponding udisp_image bin is lower than a threshold.
- * It assumes that a number of threads equal to 'rows' are launched.
+ * Assumes that a number of threads equal to 'rows' are launched.
  * @param disp_image The original disparity image.
  * @param rows The number of rows in 'disp_image'.
  * @param cols The number of cols in 'disp_image' and thus in 'udisp_image'.
@@ -71,6 +71,41 @@ __global__ void getVDisparity(int* disp_image, int rows, int cols, int* udisp_im
     if (bin < bins && udisp_image[bin * cols + i] < flatness_threshold)
       vdisp_image[vdisp_image_offset + bin]++;
     disp_image_idx++;
+  }
+}
+
+/**
+ * Gets the cumulative sum array of an array.
+ * Assumes a number of threads equal to THREADS are launched.
+ * @param input_array The input array.
+ * @param cum_sum_array The output array corresponding to the cumulative sum array of 'input_array'.
+ * @param size The number of elements in both arrays.
+ */
+__global__ void getCumSumArray(int* input_array, int* cum_sum_array, int size)
+{
+  __shared__ int acc_sum;
+  __shared__ int block_cum_sum[THREADS];
+
+  int tid = threadIdx.x;
+  if (tid == 0)
+    acc_sum = 0;
+
+  int array_offset = 0;
+  while (array_offset < size)
+  {
+    if (array_offset + tid < size)
+      block_cum_sum[tid] = input_array[array_offset + tid];
+    for (int i = 1; i < THREADS; i <<= 1)
+    {
+      __syncthreads();
+      if (tid - i >= 0)
+        block_cum_sum[tid] += block_cum_sum[tid - i];
+    }
+    if (array_offset + tid < size)
+      cum_sum_array[array_offset + tid] = block_cum_sum[tid] + acc_sum;
+    if (tid == THREADS - 1)
+      acc_sum += block_cum_sum[tid];
+    array_offset += THREADS;
   }
 }
 
@@ -98,18 +133,18 @@ __device__ int findLowerBound(int A[], int N, int x)
 
 /**
  * Executes and reduces RANSAC tries to get a fitted line on the given vdisp.
+ * Assumes a number of threads equal to THREADS are launched.
  * @param vdisp_image The filtered vdisp image on which to fit the line.
  * @param rows The number of rows in 'vdisp_image'.
  * @param cols The number of columns in 'vdisp_image'.
  * @param vdisp_cum_sum_array The cumulative sum in a linearized version of vdisp_image.
- * @param acc_disp The maximum value in 'vdisp_cum_sum_array '.
  * @param m The address where the resulting vdisp_line slope will be returned.
  * @param b The address where the resulting vdisp_line row-intersect will be returned.
  */
-__global__ void getVdispLine(int* vdisp_image, int rows, int cols, int* vdisp_cum_sum_array, int acc_vdisp, float* m,
-                             float* b)
+__global__ void getVdispLine(int* vdisp_image, int rows, int cols, int* vdisp_cum_sum_array, float* m, float* b)
 {
   int tid = threadIdx.x;
+  int acc_vdisp = vdisp_cum_sum_array[rows * cols - 1];
   curandState_t s = *g_states[tid];
 
   // RANSAC tries
