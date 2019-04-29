@@ -136,16 +136,16 @@ __device__ int findLowerBound(unsigned int A[], int N, int x)
  * Assumes a number of threads equal to THREADS are launched.
  * @param vdisp_image The filtered vdisp image on which to fit the line.
  * @param rows The number of rows in 'vdisp_image'.
- * @param cols The number of columns in 'vdisp_image'.
+ * @param bins The number of bins in 'vdisp_image' aka its number of cols.
  * @param vdisp_cum_sum_array The cumulative sum in a linearized version of vdisp_image.
  * @param m The address where the resulting vdisp_line slope will be returned.
  * @param b The address where the resulting vdisp_line row-intersect will be returned.
  */
-__global__ void getVdispLine(unsigned short* vdisp_image, int rows, int cols,
+__global__ void getVdispLine(unsigned short* vdisp_image, int rows, int bins,
                              unsigned int* vdisp_cum_sum_array, float* m, float* b)
 {
   int tid = threadIdx.x;
-  int acc_vdisp = vdisp_cum_sum_array[rows * cols - 1];
+  int acc_vdisp = vdisp_cum_sum_array[rows * bins - 1];
   curandState_t s = *g_states[tid];
 
   // RANSAC tries
@@ -155,13 +155,13 @@ __global__ void getVdispLine(unsigned short* vdisp_image, int rows, int cols,
     int r1 = acc_vdisp * curand_uniform(&s) + 1;
     int r2 = acc_vdisp * curand_uniform(&s) + 1;
 
-    int idx1 = findLowerBound(vdisp_cum_sum_array, rows * cols, r1);
-    int idx2 = findLowerBound(vdisp_cum_sum_array, rows * cols, r2);
+    int idx1 = findLowerBound(vdisp_cum_sum_array, rows * bins, r1);
+    int idx2 = findLowerBound(vdisp_cum_sum_array, rows * bins, r2);
 
-    int y1 = idx1 / cols;
-    int x1 = idx1 - y1 * cols;
-    int y2 = idx2 / cols;
-    int x2 = idx2 - y2 * cols;
+    int y1 = idx1 / bins;
+    int x1 = idx1 - y1 * bins;
+    int y2 = idx2 / bins;
+    int x2 = idx2 - y2 * bins;
     if (x1 == x2)
       continue;  // Do not consider vertical lines
     float m = float(y2 - y1) / (x2 - x1);
@@ -170,13 +170,13 @@ __global__ void getVdispLine(unsigned short* vdisp_image, int rows, int cols,
     float fs[RANSAC_EPSILON + 1];
     for (int yp = 0; yp <= RANSAC_EPSILON; yp++)
         fs[yp] = 0.0;
-    for (int x = 0; x < cols; x++)
+    for (int x = 0; x < bins; x++)
     {
       int y = m * x + b;
       if (y < 0 || y >= rows)
         break;
       for (int yp = max(0, y - RANSAC_EPSILON); yp <= min(rows - 1, y + RANSAC_EPSILON); yp++)
-        fs[abs(yp - y)] += vdisp_image[yp * cols + x];
+        fs[abs(yp - y)] += vdisp_image[yp * bins + x];
     }
     float f = 0.0;
     for (int yp = 0; yp <= RANSAC_EPSILON; yp++)
