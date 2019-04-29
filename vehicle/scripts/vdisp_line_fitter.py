@@ -115,13 +115,21 @@ def get_vdisp_line_callback(color_image_msg,
         rows, cols = disp_image.shape
 
         disp_image_gpu = cuda.mem_alloc(disp_image.nbytes)
-        udisp_image_gpu = cuda.mem_alloc(4 * HISTOGRAM_BINS * cols)
+        udisp_image_gpu = cuda.mem_alloc(
+            np.int32().itemsize * HISTOGRAM_BINS * cols)
+        vdisp_image_gpu = cuda.mem_alloc(
+            np.int32().itemsize * rows * HISTOGRAM_BINS)
 
         cuda.memcpy_htod(disp_image_gpu, disp_image)
         getUDisparity(
             disp_image_gpu, np.int32(rows), np.int32(cols),
             udisp_image_gpu, np.int32(HISTOGRAM_BINS), np.int32(BIN_SIZE),
             block=(cols, 1, 1))
+        getVDisparity(
+            disp_image_gpu, np.int32(rows), np.int32(cols),
+            udisp_image_gpu, np.int32(FLATNESS_THRESHOLD),
+            vdisp_image_gpu, np.int32(HISTOGRAM_BINS), np.int32(BIN_SIZE),
+            block=(rows, 1, 1))
 
     # vdisp_line_pub.publish(VdispLine(header=disp_image_msg.header, m=m, b=b))
 
@@ -135,15 +143,18 @@ def get_vdisp_line_callback(color_image_msg,
             udisp_filter.astype('uint8') * 255, encoding='8UC1'))
 
     if vdisp_with_fitted_line_image_pub is not None:
+        if not USE_DEPRECATED_CODE:
+            vdisp_image = np.empty((rows, HISTOGRAM_BINS), np.int32)
+            cuda.memcpy_dtoh(vdisp_image, vdisp_image_gpu)
         # Show elements with values > 0.
         vdisp_image = vdisp_image.astype('uint8') * 255
         vdisp_with_fitted_line = cv2.cvtColor(vdisp_image, cv2.COLOR_GRAY2RGB)
         _, cols = vdisp_image.shape
-        cv2.line(vdisp_with_fitted_line,
-                 (0, int(b)),
-                 (cols - 1, int((cols - 1) * (m * BIN_SIZE) + b)),
-                 (0, 0, 255),
-                 2)
+        #cv2.line(vdisp_with_fitted_line,
+        #         (0, int(b)),
+        #         (cols - 1, int((cols - 1) * (m * BIN_SIZE) + b)),
+        #         (0, 0, 255),
+        #         2)
         vdisp_with_fitted_line_image_pub.publish(
             cv_bridge.cv2_to_imgmsg(vdisp_with_fitted_line, encoding='bgr8'))
 
@@ -213,6 +224,7 @@ if __name__ == '__main__':
                 no_extern_c=True)
         initRandomStates = mod.get_function('initRandomStates')
         getUDisparity = mod.get_function('getUDisparity')
+        getVDisparity = mod.get_function('getVDisparity')
         getVdispLine = mod.get_function('getVdispLine')
         initRandomStates(np.int32(time.time()), block=(CUDA_THREADS, 1, 1))
 

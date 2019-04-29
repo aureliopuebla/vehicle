@@ -40,9 +40,37 @@ __global__ void getUDisparity(int* disp_image, int rows, int cols, int* udisp_im
   for (int i = 0; i < rows; i++)
   {
     int bin = disp_image[disp_image_idx] / bin_size;
-    if(bin < bins)
-      udisp_image[bin*cols + tid]++;
+    if (bin < bins)
+      udisp_image[bin * cols + tid]++;
     disp_image_idx += cols;
+  }
+}
+
+/**
+ * Gets the vdisp_image from the disp_image given the bins and bin_size for the histograms.
+ * It only considers disparity values whose corresponding udisp_image bin is lower than a threshold.
+ * It assumes that a number of threads equal to 'rows' are launched.
+ * @param disp_image The original disparity image.
+ * @param rows The number of rows in 'disp_image'.
+ * @param cols The number of cols in 'disp_image' and thus in 'udisp_image'.
+ * @param udisp_image The previously calculated udisp_image.
+ * @param flatness_threshold The filtering threshold to use to know which disparity values to consider.
+ * @param vdisp_image The output array for vdisp_image.
+ * @param bins The number of bins for 'vdisp_image' aka its number of cols.
+ * @bin_size The range of values each histogram bin holds.
+ */
+__global__ void getVDisparity(int* disp_image, int rows, int cols, int* udisp_image, int flatness_threshold,
+                              int* vdisp_image, int bins, int bin_size)
+{
+  int tid = threadIdx.x;
+  int disp_image_idx = tid * cols;
+  int vdisp_image_offset = tid * bins;
+  for (int i = 0; i < cols; i++)
+  {
+    int bin = disp_image[disp_image_idx] / bin_size;
+    if (bin < bins && udisp_image[bin * cols + i] < flatness_threshold)
+      vdisp_image[vdisp_image_offset + bin]++;
+    disp_image_idx++;
   }
 }
 
