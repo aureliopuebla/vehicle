@@ -38,17 +38,14 @@ def get_road_line_fit_filter(disp_image, m, b):
         disp_image - road_row_values) <= ROAD_LINE_FIT_ALPHA * road_row_values
 
 
-def get_ransac_fitted_vdisp_line(vdisp_image_gpu, rows, bins, vdisp_cum_sum_array_gpu):
+def get_ransac_fitted_vdisp_line(
+        vdisp_image_gpu, rows, bins, vdisp_cum_sum_array_gpu):
     """Gets the vdisp_line using RANSAC running on CUDA."""
     m = np.empty(1, dtype=np.float32)
     b = np.empty(1, dtype=np.float32)
     getVdispLine(
-        vdisp_image_gpu,
-        np.int32(rows),
-        np.int32(bins),
-        vdisp_cum_sum_array_gpu,
-        cuda.Out(m),
-        cuda.Out(b),
+        vdisp_image_gpu, np.int32(rows), np.int32(bins),
+        vdisp_cum_sum_array_gpu, cuda.Out(m), cuda.Out(b),
         block=(CUDA_THREADS, 1, 1))
     return m[0] / BIN_SIZE, b[0]
 
@@ -128,7 +125,8 @@ def get_vdisp_line_callback(color_image_msg,
             vdisp_image_gpu, np.int32(HISTOGRAM_BINS), np.int32(BIN_SIZE),
             block=(rows, 1, 1))
         getCumSumArray(
-            vdisp_image_gpu, vdisp_cum_sum_array_gpu, np.int32(rows * HISTOGRAM_BINS),
+            vdisp_image_gpu, vdisp_cum_sum_array_gpu, np.int32(
+                rows * HISTOGRAM_BINS),
             block=(CUDA_THREADS, 1, 1))
         m, b = get_ransac_fitted_vdisp_line(
             vdisp_image_gpu, rows, HISTOGRAM_BINS, vdisp_cum_sum_array_gpu)
