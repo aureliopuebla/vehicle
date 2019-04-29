@@ -105,15 +105,15 @@ def get_vdisp_line_callback(color_image_msg,
         m, b = deprecated.get_ransac_fitted_vdisp_line(vdisp_image)
 
     else:
+        # Note: Optimized for disp_image of type uint16.
         cuda_context.push()
-        disp_image = disp_image.astype(np.int32)
         rows, cols = disp_image.shape
 
         disp_image_gpu = cuda.mem_alloc(disp_image.nbytes)
         udisp_image_gpu = cuda.mem_alloc(
-            np.int32().itemsize * HISTOGRAM_BINS * cols)
+            np.uint16().itemsize * HISTOGRAM_BINS * cols)
         vdisp_image_gpu = cuda.mem_alloc(
-            np.int32().itemsize * rows * HISTOGRAM_BINS)
+            np.uint16().itemsize * rows * HISTOGRAM_BINS)
         vdisp_cum_sum_array_gpu = cuda.mem_alloc(
             np.int32().itemsize * rows * HISTOGRAM_BINS)
 
@@ -137,7 +137,7 @@ def get_vdisp_line_callback(color_image_msg,
 
     if udisp_threshold_filter_image_pub is not None:
         if not USE_DEPRECATED_CODE:
-            udisp_image = np.empty((HISTOGRAM_BINS, cols), np.int32)
+            udisp_image = np.empty((HISTOGRAM_BINS, cols), np.uint16)
             cuda.memcpy_dtoh(udisp_image, udisp_image_gpu)
             udisp_filter = get_udisp_threshold_filter(disp_image, udisp_image)
         # Convert Binary Image to uint8.
@@ -146,7 +146,7 @@ def get_vdisp_line_callback(color_image_msg,
 
     if vdisp_with_fitted_line_image_pub is not None:
         if not USE_DEPRECATED_CODE:
-            vdisp_image = np.empty((rows, HISTOGRAM_BINS), np.int32)
+            vdisp_image = np.empty((rows, HISTOGRAM_BINS), np.uint16)
             cuda.memcpy_dtoh(vdisp_image, vdisp_image_gpu)
         # Show elements with values > 0.
         vdisp_image = vdisp_image.astype('uint8') * 255

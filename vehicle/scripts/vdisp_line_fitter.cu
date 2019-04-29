@@ -21,8 +21,6 @@ __global__ void initRandomStates(int seed)
   g_states[tid] = s;
 }
 
-/** TODO: OPTIMIZE TYPES **/
-
 /**
  * Gets the udisp_image from the disp_image given the bins and bin_size for the histograms.
  * Assumes that a number of threads equal to 'cols' are launched.
@@ -33,7 +31,8 @@ __global__ void initRandomStates(int seed)
  * @param bins The number of bins for 'udisp_image' aka its number of rows.
  * @bin_size The range of values each histogram bin holds.
  */
-__global__ void getUDisparity(int* disp_image, int rows, int cols, int* udisp_image, int bins, int bin_size)
+__global__ void getUDisparity(unsigned short* disp_image, int rows, int cols,
+                              unsigned short* udisp_image, int bins, int bin_size)
 {
   int tid = threadIdx.x;
   int disp_image_idx = tid;
@@ -59,8 +58,9 @@ __global__ void getUDisparity(int* disp_image, int rows, int cols, int* udisp_im
  * @param bins The number of bins for 'vdisp_image' aka its number of cols.
  * @bin_size The range of values each histogram bin holds.
  */
-__global__ void getVDisparity(int* disp_image, int rows, int cols, int* udisp_image, int flatness_threshold,
-                              int* vdisp_image, int bins, int bin_size)
+__global__ void getVDisparity(unsigned short* disp_image, int rows, int cols,
+                              unsigned short* udisp_image, int flatness_threshold,
+                              unsigned short* vdisp_image, int bins, int bin_size)
 {
   int tid = threadIdx.x;
   int disp_image_idx = tid * cols;
@@ -81,7 +81,7 @@ __global__ void getVDisparity(int* disp_image, int rows, int cols, int* udisp_im
  * @param cum_sum_array The output array corresponding to the cumulative sum array of 'input_array'.
  * @param size The number of elements in both arrays.
  */
-__global__ void getCumSumArray(int* input_array, int* cum_sum_array, int size)
+__global__ void getCumSumArray(unsigned short* input_array, unsigned int* cum_sum_array, int size)
 {
   __shared__ int acc_sum;
   __shared__ int block_cum_sum[THREADS];
@@ -116,7 +116,7 @@ __global__ void getCumSumArray(int* input_array, int* cum_sum_array, int size)
  * @param x The element to search for.
  * @return The lower bound index in 'A' after the search.
  */
-__device__ int findLowerBound(int A[], int N, int x)
+__device__ int findLowerBound(unsigned int A[], int N, int x)
 {
   int l = 0;
   int h = N;
@@ -141,7 +141,8 @@ __device__ int findLowerBound(int A[], int N, int x)
  * @param m The address where the resulting vdisp_line slope will be returned.
  * @param b The address where the resulting vdisp_line row-intersect will be returned.
  */
-__global__ void getVdispLine(int* vdisp_image, int rows, int cols, int* vdisp_cum_sum_array, float* m, float* b)
+__global__ void getVdispLine(unsigned short* vdisp_image, int rows, int cols,
+                             unsigned int* vdisp_cum_sum_array, float* m, float* b)
 {
   int tid = threadIdx.x;
   int acc_vdisp = vdisp_cum_sum_array[rows * cols - 1];
