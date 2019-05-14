@@ -250,7 +250,8 @@ if __name__ == '__main__':
         '/multisense/left/image_rect_color', Image)
     disp_image_sub = message_filters.Subscriber(
         '/multisense/left/disparity', Image)
-    ts = message_filters.TimeSynchronizer([color_image_sub, disp_image_sub], 1)
+    ts = message_filters.TimeSynchronizer(
+        [color_image_sub, disp_image_sub], queue_size=2)
     ts.registerCallback(get_vdisp_line_callback,
                         cv_bridge,
                         None if USE_DEPRECATED_CODE else cuda_context,

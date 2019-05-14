@@ -3,9 +3,9 @@
 
 
     <node pkg="rosbag" type="play" name="play_node" output="log"
-        args="--clock -l '/media/aurelio/Data/TEC Recordings/TEC_2019-04-03-17-35-59.bag'"/>
+          args="--clock -l '/media/aurelio/Data/TEC Recordings/TEC_2019-04-03-17-35-59.bag'"/>
 
-    <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui_node"/>
+    <!-- <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui_node"/> -->
 
     <node pkg="vehicle" type="vdisp_line_fitter.py" name="vdisp_line_fitter_node"
         ns="vdisp_line_fitter" cwd="node" respawn="true" output="log">
@@ -14,6 +14,13 @@
         <param name="publish_vdisp_with_fitted_line" type="bool" value="False"/>
         <param name="publish_vdisp_line_fitted_road" type="bool" value="False"/>
         <param name="publish_cloud_coloring" type="bool" value="False"/>
+    </node>
+
+    <node pkg="vehicle" type="vanishing_point_detector.py"
+          name="vanishing_point_detector_node" ns="vanishing_point_detector"
+          cwd="node" respawn="true" output="screen">
+        <param name="publish_gabor_filtered_images" type="bool" value="False"/>
+        <rosparam param="gabor_filter_frequencies">[1]</rosparam>>
     </node>
 
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
