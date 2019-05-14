@@ -14,7 +14,7 @@ import cv2
 import string
 import time
 
-CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME = 'vdisp_line_fitter.cu'
+CUDA_VDISP_LINE_FITTER_FILENAME = 'vdisp_line_fitter.cu'
 
 
 def get_udisp_threshold_filter(disp_image, udisp_image):
@@ -215,7 +215,7 @@ if __name__ == '__main__':
         cuda.init()
         cuda_device = cuda.Device(0)
         cuda_context = cuda_device.make_context()
-        with open(CUDA_VDISP_LINE_RANSAC_FITTER_FILENAME, 'r') as f:
+        with open(CUDA_VDISP_LINE_FITTER_FILENAME, 'r') as f:
             mod = SourceModule(
                 string.Template(
                     f.read()).substitute(
