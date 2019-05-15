@@ -42,7 +42,7 @@ def get_gabor_filter_kernel(theta, frequency, sigma_x, sigma_y, size):
     g /= 2 * np.pi * sigma_x * sigma_y
     g *= np.exp(1j * (2 * np.pi * frequency * rotx))
 
-    return g.real, g.imag
+    return g.real.astype(np.float32), g.imag.astype(np.float32)
 
 
 def get_gabor_filter_kernels(thetas, frequencies):
@@ -50,18 +50,36 @@ def get_gabor_filter_kernels(thetas, frequencies):
        the kernel of ith theta, jth frequency, kth complex part (where 0 = real,
        1 = imag)."""
     return [[get_gabor_filter_kernel(
-                 theta, frequency, sigma_x=5, sigma_y=2, size=10)
+                 theta, frequency, sigma_x=5, sigma_y=2, size=11)
              for frequency in frequencies]
             for theta in thetas]
 
 
 def apply_gabor_kernels(grey_image, gabor_kernels):
     rows, cols = grey_image.shape
-    energies = np.empty((rows, cols, THETAS_N), dtype=np.float32)
+    grey_image_gpu = cuda.mem_alloc(grey_image.nbytes)
+    cuda.memcpy_htod(grey_image_gpu, grey_image)
+
+    energies = np.empty((rows - 10, cols - 10, THETAS_N), dtype=np.float32)
     for i in range(THETAS_N):
-        real = cv2.filter2D(grey_image, cv2.CV_8U, gabor_kernels[i][0][0])
-        imag = cv2.filter2D(grey_image, cv2.CV_8U, gabor_kernels[i][0][1])
-        energies[:, :, i] = np.sqrt(real**2 + imag**2)
+        real_kernel = gabor_kernels[i][0][0]
+        imag_kernel = gabor_kernels[i][0][1]
+
+        real_kernel_gpu = cuda.mem_alloc(real_kernel.nbytes)
+        imag_kernel_gpu = cuda.mem_alloc(imag_kernel.nbytes)
+        response_gpu = cuda.mem_alloc(
+            np.float32().itemsize * (rows - 10) * (cols - 10))
+
+        cuda.memcpy_htod(real_kernel_gpu, real_kernel)
+        cuda.memcpy_htod(imag_kernel_gpu, imag_kernel)
+        complexFilter2D(
+            grey_image_gpu, np.int32(rows), np.int32(cols), response_gpu,
+            real_kernel_gpu, imag_kernel_gpu, np.int32(11),
+            block=(16, 16, 1), grid=(cols / 16, rows / 16))
+        response = np.empty((rows - 10, cols - 10), np.float32)
+        cuda.memcpy_dtoh(response, response_gpu)
+
+        energies[:, :, i] = response
     return energies
 
 
@@ -99,7 +117,7 @@ def get_vanishing_point_callback(color_image_msg,
 
     cuda.memcpy_htod(energies_gpu, energies)
     combineFilteredImages(
-        energies_gpu, combined_gpu, block=(16, 16, 1), grid=(rows/16, cols/16))
+        energies_gpu, combined_gpu, block=(16, 16, 1), grid=(cols/16, rows/16))
     combined = np.empty((rows, cols), np.float32)
     cuda.memcpy_dtoh(combined, combined_gpu)
 
@@ -108,9 +126,14 @@ def get_vanishing_point_callback(color_image_msg,
 
     if gabor_filtered_images_pubs is not None:
         for i in range(THETAS_N):
+            kernel = gabor_kernels[i][0][1]
+            kernel -= kernel.min()
+            kernel /= kernel.max()
+            kernel *= 255
             gabor_filtered_images_pubs[i].publish(cv_bridge.cv2_to_imgmsg(
-                (17 * combined).astype('uint8'),
-                #(gabor_kernels[i][0][0] * 255).astype('uint8'),
+                kernel.astype('uint8'),
+                #(50 * combined).astype('uint8'),
+                #(energies[:, :, i] * 5).astype('uint8'),
                 encoding='8UC1'))
 
 
@@ -141,6 +164,7 @@ if __name__ == '__main__':
     cuda_context = cuda_device.make_context()
     with open(CUDA_VANISHING_POINT_DETECTOR_FILENAME, 'r') as f:
         mod = SourceModule(f.read(), no_extern_c=True)
+    complexFilter2D = mod.get_function('complexFilter2D')
     combineFilteredImages = mod.get_function('combineFilteredImages')
 
     cv_bridge = CvBridge()

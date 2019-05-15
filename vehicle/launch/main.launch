@@ -20,7 +20,7 @@
           name="vanishing_point_detector_node" ns="vanishing_point_detector"
           cwd="node" respawn="true" output="screen">
         <param name="publish_gabor_filtered_images" type="bool" value="True"/>
-        <rosparam param="gabor_filter_frequencies">[0.3]</rosparam>>
+        <rosparam param="gabor_filter_frequencies">[0.5]</rosparam>>
     </node>
 
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"

@@ -29,7 +29,7 @@ __global__ void initRandomStates(int seed)
  * @param cols The number of cols in 'disp_image' and thus in 'udisp_image'.
  * @param udisp_image The output array for udisp_image.
  * @param bins The number of bins for 'udisp_image' aka its number of rows.
- * @bin_size The range of values each histogram bin holds.
+ * @param bin_size The range of values each histogram bin holds.
  */
 __global__ void getUDisparity(unsigned short* disp_image, int rows, int cols,
                               unsigned short* udisp_image, int bins, int bin_size)
@@ -56,7 +56,7 @@ __global__ void getUDisparity(unsigned short* disp_image, int rows, int cols,
  * @param flatness_threshold The filtering threshold to use to know which disparity values to consider.
  * @param vdisp_image The output array for vdisp_image.
  * @param bins The number of bins for 'vdisp_image' aka its number of cols.
- * @bin_size The range of values each histogram bin holds.
+ * @param bin_size The range of values each histogram bin holds.
  */
 __global__ void getVDisparity(unsigned short* disp_image, int rows, int cols,
                               unsigned short* udisp_image, int flatness_threshold,
