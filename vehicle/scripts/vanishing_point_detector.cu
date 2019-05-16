@@ -4,26 +4,54 @@
 
 extern "C" {
 /**
- * Applies a 2D Complex Convolution on a real image given a square kernel and returns its magnitude response.
+ * Clears out the Gabor Energies Tensor, setting all of its values to zero.
+ * The Gabor Energies Tensor is the data structure whose [y, x, theta] value contains the average magnitude response to
+ * the different complex 'Gabor' filters for an specific 'theta' orientation at 'image' location (y, x).
+ * This is the first step towards its calculation. Note that the number of rows and columns in the Gabor Energies Tensor
+ * is (image_rows - (kernel_size >> 1)) X (image_cols - (kernel_size >> 1)) due to the padding lost at convolution.
+ * @param gabor_energies The Gabor Energies Tensor.
+ * @param rows The number of rows in the 'image' whose Energies Tensor will be calculated.
+ * @param cols The number of columns in the 'image' whose Energies Tensor will be calculated.
+ * @param kernel_size Both the number of rows and columns in the Gabor kernels to apply. Should be an odd number.
+ */
+__global__ void resetGaborEnergiesTensor(float* gabor_energies, int rows, int cols, int kernel_size)
+{
+  int image_y = blockDim.y * blockIdx.y + threadIdx.y;
+  int image_x = blockDim.x * blockIdx.x + threadIdx.x;
+  int image_padding = (kernel_size >> 1);
+  if (image_y < image_padding || image_y + image_padding >= rows ||
+      image_x < image_padding || image_x + image_padding >= cols)
+    return;  // Part of the padding lost due to lack of border information.
+  int tensor_offset = ((image_y - image_padding) * (cols - (image_padding << 1)) + (image_x - image_padding)) * THETA_N;
+  for (int i = 0; i < THETA_N; i++)
+    gabor_energies[tensor_offset + i] = 0.0f;
+}
+
+/**
+ * Applies a 2D Complex Convolution on a real image given a square kernel and adds its magnitude response to the
+ * corresponding [y, x, theta] location in the Gabor Energies Tensor.
+ * This kernel is the second step towards its calculation and should be called once for every frequency to apply.
+ * @param gabor_energies The Gabor Energies Tensor.
+ * @param theta_idx The orientation index for the Gabor Energies Tensor specifying the orientation for which to add
+ *                  this convolution.
  * @param image The image on which to apply the convolution operation.
  * @param rows The number of rows in 'image'.
  * @param cols The number of columns in 'image'.
- * @param response The output image where the magnitude response of the convolution will be placed.
- *                 It must be of size (rows - kernel_size / 2 * 2) X (cols - kernel_size / 2 * 2).
  * @param real_kernel The real part of the square convolution kernel to apply on 'image'.
  * @param imag_kernel The imaginary part of the square convolution kernel to apply on 'image'.
  * @param kernel_size Both the number of rows and columns in 'kernel'. Should be an odd number.
  */
-__global__ void complexFilter2D(unsigned char* image, int rows, int cols, float* response,
-                                float* real_kernel, float* imag_kernel, int kernel_size)
+__global__ void addGaborFilterMagnitudeResponse(float* gabor_energies, int theta_idx,
+                                                unsigned char* image, int rows, int cols,
+                                                float* real_kernel, float* imag_kernel, int kernel_size)
 {
   int image_y = blockDim.y * blockIdx.y + threadIdx.y;
   int image_x = blockDim.x * blockIdx.x + threadIdx.x;
-  int offset = (kernel_size >> 1);
-  if (image_y < offset || image_y + offset >= rows ||
-      image_x < offset || image_x + offset >= cols)
+  int image_padding = (kernel_size >> 1);
+  if (image_y < image_padding || image_y + image_padding >= rows ||
+      image_x < image_padding || image_x + image_padding >= cols)
     return;  // Part of the padding lost due to lack of border information.
-  int image_idx = (image_y - offset) * cols + (image_x - offset), kernel_idx = 0;
+  int image_idx = (image_y - image_padding) * cols + (image_x - image_padding), kernel_idx = 0;
   float real_response = 0.0f, imag_response = 0.0f;
   for (int i = 0; i < kernel_size; i++)
   {
@@ -36,12 +64,36 @@ __global__ void complexFilter2D(unsigned char* image, int rows, int cols, float*
     }
     image_idx += cols - kernel_size;
   }
-  response[(image_y - offset) * (cols - (offset << 1)) + (image_x - offset)] = (
-      sqrtf(real_response*real_response + imag_response*imag_response));
+  int tensor_offset = ((image_y - image_padding) * (cols - (image_padding << 1)) + (image_x - image_padding)) * THETA_N;
+  gabor_energies[tensor_offset + theta_idx] = sqrtf(real_response * real_response + imag_response * imag_response);
 }
 
 /**
- * Combines the
+ * Divides all of the Gabor Energies Tensor elements by a constant.
+ * This is the third and last step to calculate the Tensor. This step is used to average out the magnitude responses of
+ * the different applied Gabor kernels: for a given [y, x, theta], one is applied per frequency.
+ * @param gabor_energies The Gabor Energies Tensor.
+ * @param rows The number of rows in the 'image' whose Energies Tensor will be calculated.
+ * @param cols The number of columns in the 'image' whose Energies Tensor will be calculated.
+ * @param kernel_size Both the number of rows and columns in the applied Gabor kernels. Should be an odd number.
+ * @param constant The number by which to divide all of the Gabor Energies Tensor elements. Should be equal to the
+ *                 number of applied frequencies.
+ */
+__global__ void divideGaborEnergiesTensor(float* gabor_energies, int rows, int cols, int kernel_size, int constant)
+{
+  int image_y = blockDim.y * blockIdx.y + threadIdx.y;
+  int image_x = blockDim.x * blockIdx.x + threadIdx.x;
+  int image_padding = (kernel_size >> 1);
+  if (image_y < image_padding || image_y + image_padding >= rows ||
+      image_x < image_padding || image_x + image_padding >= cols)
+    return;  // Part of the padding lost due to lack of border information.
+  int tensor_offset = ((image_y - image_padding) * (cols - (image_padding << 1)) + (image_x - image_padding)) * THETA_N;
+  for (int i = 0; i < THETA_N; i++)
+    gabor_energies[tensor_offset + i] /= constant;
+}
+
+/**
+ * Combines the TODO: documment this & improve kernel.
  * @param energies The .
  */
 __global__ void combineFilteredImages(float* energies, int rows, int cols, float* combined)
