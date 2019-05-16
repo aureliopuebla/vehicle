@@ -32,15 +32,17 @@ def get_gabor_filter_kernel(theta, frequency, sigma_x, sigma_y, size):
           kernel before rotation.
       size: Kernel size which applies to both dimensions.
     """
-    y, x = np.mgrid[-int(size/2):int(size/2) + 1, -int(size/2):int(size/2) + 1]
+    y, x = np.mgrid[-int(size / 2):int(size / 2) + 1,
+                    -int(size / 2):int(size / 2) + 1]
 
-    rotx = x * np.cos(theta) + y * np.sin(theta)
-    roty = -x * np.sin(theta) + y * np.cos(theta)
+    rot_x = x * np.cos(theta) + y * np.sin(theta)
+    rot_y = -x * np.sin(theta) + y * np.cos(theta)
 
     g = np.zeros(y.shape, dtype=np.complex)
-    g[:] = np.exp(-0.5 * (rotx ** 2 / sigma_x ** 2 + roty ** 2 / sigma_y ** 2))
+    g[:] = np.exp(
+        -0.5 * (rot_x ** 2 / sigma_x ** 2 + rot_y ** 2 / sigma_y ** 2))
     g /= 2 * np.pi * sigma_x * sigma_y
-    g *= np.exp(1j * (2 * np.pi * frequency * rotx))
+    g *= np.exp(1j * (2 * np.pi * frequency * rot_x))
 
     return g.real.astype(np.float32), g.imag.astype(np.float32)
 
@@ -49,18 +51,23 @@ def get_gabor_filter_kernels(thetas, frequencies):
     """Returns an array of Gabor filter kernels where position [i][j][k] means
        the kernel of ith theta, jth frequency, kth complex part (where 0 = real,
        1 = imag)."""
-    return [[get_gabor_filter_kernel(
-                 theta, frequency, sigma_x=5, sigma_y=2, size=11)
+    return [[get_gabor_filter_kernel(theta,
+                                     frequency,
+                                     sigma_x=GABOR_FILTER_SIGMA_X,
+                                     sigma_y=GABOR_FILTER_SIGMA_Y,
+                                     size=GABOR_FILTER_KERNEL_SIZE)
              for frequency in frequencies]
             for theta in thetas]
 
 
 def apply_gabor_kernels(grey_image, gabor_kernels):
-    rows, cols = grey_image.shape
-    grey_image_gpu = cuda.mem_alloc(grey_image.nbytes)
-    cuda.memcpy_htod(grey_image_gpu, grey_image)
+    original_rows, original_cols = grey_image.shape
+    response_rows = original_rows - GABOR_FILTER_KERNEL_SIZE + 1
+    response_cols = original_cols - GABOR_FILTER_KERNEL_SIZE + 1
+    grey_image_gpu = cuda.In(grey_image)
 
-    energies = np.empty((rows - 10, cols - 10, THETAS_N), dtype=np.float32)
+    energies = np.empty((response_rows, response_cols, THETAS_N),
+                        dtype=np.float32)
     for i in range(THETAS_N):
         real_kernel = gabor_kernels[i][0][0]
         imag_kernel = gabor_kernels[i][0][1]
@@ -68,15 +75,16 @@ def apply_gabor_kernels(grey_image, gabor_kernels):
         real_kernel_gpu = cuda.mem_alloc(real_kernel.nbytes)
         imag_kernel_gpu = cuda.mem_alloc(imag_kernel.nbytes)
         response_gpu = cuda.mem_alloc(
-            np.float32().itemsize * (rows - 10) * (cols - 10))
+            np.float32().itemsize * (response_rows) * (response_cols))
 
         cuda.memcpy_htod(real_kernel_gpu, real_kernel)
         cuda.memcpy_htod(imag_kernel_gpu, imag_kernel)
         complexFilter2D(
-            grey_image_gpu, np.int32(rows), np.int32(cols), response_gpu,
-            real_kernel_gpu, imag_kernel_gpu, np.int32(11),
-            block=(16, 16, 1), grid=(cols / 16, rows / 16))
-        response = np.empty((rows - 10, cols - 10), np.float32)
+            grey_image_gpu, np.int32(original_rows), np.int32(original_cols),
+            response_gpu, real_kernel_gpu, imag_kernel_gpu,
+            np.int32(GABOR_FILTER_KERNEL_SIZE),
+            block=(16, 16, 1), grid=(original_cols / 16, original_rows / 16))
+        response = np.empty((response_rows, response_cols), np.float32)
         cuda.memcpy_dtoh(response, response_gpu)
 
         energies[:, :, i] = response
@@ -107,57 +115,74 @@ def get_vanishing_point_callback(color_image_msg,
     color_image = cv_bridge.imgmsg_to_cv2(
         color_image_msg, desired_encoding='passthrough')
     grey_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+    grey_image = grey_image[
+        int(vdisp_line.b) - VP_HORIZON_CANDIDATES_MARGIN:, :]
 
     cuda_context.push()
-    rows, cols = grey_image.shape
+    original_rows, original_cols = grey_image.shape
+    response_rows = original_rows - GABOR_FILTER_KERNEL_SIZE + 1
+    response_cols = original_cols - GABOR_FILTER_KERNEL_SIZE + 1
 
     energies = apply_gabor_kernels(grey_image, gabor_kernels)
     energies_gpu = cuda.mem_alloc(energies.nbytes)
-    combined_gpu = cuda.mem_alloc(np.float32().itemsize * rows * cols)
+    combined_gpu = cuda.mem_alloc(
+        np.float32().itemsize * response_rows * response_cols)
 
     cuda.memcpy_htod(energies_gpu, energies)
     combineFilteredImages(
-        energies_gpu, combined_gpu, block=(16, 16, 1), grid=(cols/16, rows/16))
-    combined = np.empty((rows, cols), np.float32)
+        energies_gpu, np.int32(response_rows), np.int32(response_cols),
+        combined_gpu, block=(16, 16, 1),
+        grid=(int(np.ceil(response_cols / 16)),
+              int(np.ceil(response_rows / 16))))
+    combined = np.empty((response_rows, response_cols), np.float32)
     cuda.memcpy_dtoh(combined, combined_gpu)
 
-    vanishing_point_pub.publish(
+    vanishing_point_pub.publish(  # TODO: Publish real VP
         VanishingPoint(header=color_image_msg.header, row=0, col=0))
 
     if gabor_filtered_images_pubs is not None:
         for i in range(THETAS_N):
-            kernel = gabor_kernels[i][0][1]
+            kernel = gabor_kernels[i][0][0].copy()
             kernel -= kernel.min()
             kernel /= kernel.max()
             kernel *= 255
+            energy = energies[:, :, i]
+            energy -= energy.min()
+            energy /= energy.max()
+            energy *= 255
+            combined -= combined.min()
+            combined /= combined.max()
+            combined *= 255
             gabor_filtered_images_pubs[i].publish(cv_bridge.cv2_to_imgmsg(
-                kernel.astype('uint8'),
-                #(50 * combined).astype('uint8'),
-                #(energies[:, :, i] * 5).astype('uint8'),
+                #kernel.astype('uint8'),
+                #combined.astype('uint8'),
+                energy.astype('uint8'),
                 encoding='8UC1'))
 
 
 if __name__ == '__main__':
     rospy.init_node('vanishing_point_detector', anonymous=False)
 
-    # Vanishing Point Detection Parameters
-    THETAS_N = 4  # Implementation Specific
-    GABOR_FILTER_THETAS = [np.pi / THETAS_N * i for i in range(THETAS_N)]
-    VP_LAMBDA = 4 * np.sqrt(2)
-    VP_KERNEL_SIZE = int(10 * VP_LAMBDA / np.pi) + 1  # Must be odd
-    VP_W0 = 2 * np.pi / VP_LAMBDA
-    VP_K = np.pi / 2
-    VP_DELTA = -VP_W0 ** 2 / (VP_K ** 2 * 8)
-
     # The following publications are for debugging and visualization only as
     # they severely slow down node execution.
     PUBLISH_GABOR_FILTERED_IMAGES = rospy.get_param(
         '~publish_gabor_filtered_images', False)
 
+    # Vanishing Point Detection Parameters
     VP_HORIZON_CANDIDATES_MARGIN = rospy.get_param(
         '~vp_horizon_candidates_margin', 20)
+    THETAS_N = 4  # Implementation Specific
+    GABOR_FILTER_THETAS = [np.pi / THETAS_N * i for i in range(THETAS_N)]
+    GABOR_FILTER_KERNEL_SIZE = rospy.get_param(
+        '~gabor_filter_kernel_size', 21)  # Should be odd.
+    assert GABOR_FILTER_KERNEL_SIZE % 2 == 1
+    GABOR_FILTER_SIGMA_X = rospy.get_param(
+        '~gabor_filter_sigma_x', 4)
+    GABOR_FILTER_SIGMA_Y = rospy.get_param(
+        '~gabor_filter_sigma_y', 2)
+    # Recommendation: Values between 0.1 and 0.5
     GABOR_FILTER_FREQUENCIES = rospy.get_param(
-        '~gabor_filter_frequencies', [1, 2, 4, 8])
+        '~gabor_filter_frequencies', [0.25, 0.3, 0.35])
 
     cuda.init()
     cuda_device = cuda.Device(0)

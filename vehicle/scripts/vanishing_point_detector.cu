@@ -44,11 +44,13 @@ __global__ void complexFilter2D(unsigned char* image, int rows, int cols, float*
  * Combines the
  * @param energies The .
  */
-__global__ void combineFilteredImages(float* energies, float* combined)
+__global__ void combineFilteredImages(float* energies, int rows, int cols, float* combined)
 {
-  int offset = (
-    (gridDim.x * blockDim.x) * (blockDim.y * blockIdx.y + threadIdx.y) +
-    blockDim.x * blockIdx.x + threadIdx.x);
+  int image_y = blockDim.y * blockIdx.y + threadIdx.y;
+  int image_x = blockDim.x * blockIdx.x + threadIdx.x;
+  int offset = image_y * cols + image_x;
+  if (image_y >= rows || image_x >= cols)
+    return;  // Out of image.
   int descending_energies_arg[THETA_N];
   float temp_energies[THETA_N];
   for (int i = 0; i < THETA_N; i++)
@@ -66,7 +68,7 @@ __global__ void combineFilteredImages(float* energies, float* combined)
     descending_energies_arg[i] = max_idx;
     temp_energies[max_idx] = -1.0f;
   }
-  combined[offset] = (energies[THETA_N * offset + descending_energies_arg[1]] -
-                      energies[THETA_N * offset + descending_energies_arg[2]]);
+  combined[offset] = (energies[THETA_N * offset + descending_energies_arg[0]] -
+                      energies[THETA_N * offset + descending_energies_arg[3]]);
 }
 }

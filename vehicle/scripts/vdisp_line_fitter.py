@@ -183,8 +183,9 @@ def get_vdisp_line_callback(color_image_msg,
 if __name__ == '__main__':
     rospy.init_node('vdisp_line_fitter', anonymous=False)
 
-    # CUDA_THREADS should be a power of 2.
+    # CUDA_THREADS should be a power of 2. Used for cum_sum and RANSAC kernels.
     CUDA_THREADS = rospy.get_param('~cuda_threads', 1024)
+    assert (-CUDA_THREADS & CUDA_THREADS) == CUDA_THREADS
     USE_DEPRECATED_CODE = rospy.get_param('~use_deprecated_code', False)
 
     # The following publications are for debugging and visualization only as
