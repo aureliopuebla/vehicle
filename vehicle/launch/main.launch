@@ -19,9 +19,9 @@
     <node pkg="vehicle" type="vanishing_point_detector.py"
           name="vanishing_point_detector_node" ns="vanishing_point_detector"
           cwd="node" respawn="true" output="screen">
-        <param name="publish_gabor_filter_kernels" type="bool" value="True"/>
-        <param name="publish_gabor_energies" type="bool" value="True"/>
-        <param name="publish_combined_gabor_energies" type="bool" value="False"/>
+        <param name="publish_gabor_filter_kernels" type="bool" value="False"/>
+        <param name="publish_gabor_energies" type="bool" value="False"/>
+        <param name="publish_combined_gabor_energies" type="bool" value="True"/>
     </node>
 
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"

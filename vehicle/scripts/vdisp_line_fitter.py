@@ -140,14 +140,14 @@ def get_vdisp_line_callback(color_image_msg,
             udisp_filter = get_udisp_threshold_filter(disp_image, udisp_image)
         # Convert Binary Image to uint8.
         udisp_threshold_filter_image_pub.publish(cv_bridge.cv2_to_imgmsg(
-            udisp_filter.astype('uint8') * 255, encoding='8UC1'))
+            udisp_filter.astype(np.uint8) * 255, encoding='8UC1'))
 
     if vdisp_with_fitted_line_image_pub is not None:
         if not USE_DEPRECATED_CODE:
             vdisp_image = np.empty((rows, HISTOGRAM_BINS), np.uint16)
             cuda.memcpy_dtoh(vdisp_image, vdisp_image_gpu)
         # Show elements with values > 0.
-        vdisp_image = vdisp_image.astype('uint8') * 255
+        vdisp_image = vdisp_image.astype(np.uint8) * 255
         vdisp_with_fitted_line = cv2.cvtColor(vdisp_image, cv2.COLOR_GRAY2RGB)
         _, cols = vdisp_image.shape
         cv2.line(vdisp_with_fitted_line,

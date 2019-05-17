@@ -139,8 +139,9 @@ def get_vanishing_point_callback(color_image_msg,
     color_image = cv_bridge.imgmsg_to_cv2(
         color_image_msg, desired_encoding='passthrough')
     grey_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
-    grey_image = grey_image[
-        int(vdisp_line.b) - VP_HORIZON_CANDIDATES_MARGIN:, :]
+    grey_image = grey_image[int(np.round(vdisp_line.b)) +
+                            VP_HORIZON_CANDIDATES_MARGIN -
+                            int(GABOR_FILTER_KERNEL_SIZE / 2):, :]
 
     cuda_context.push()
     original_rows, original_cols = grey_image.shape
@@ -148,54 +149,61 @@ def get_vanishing_point_callback(color_image_msg,
     energies_cols = original_cols - GABOR_FILTER_KERNEL_SIZE + 1
 
     energies_gpu = apply_gabor_kernels(grey_image, gabor_kernels_gpu)
-    combined_gpu = cuda.mem_alloc(
+
+    combined_energies_gpu = cuda.mem_alloc(
         np.float32().itemsize * energies_rows * energies_cols)
-    combineFilteredImages(
+    combined_phases_gpu = cuda.mem_alloc(
+        np.float32().itemsize * energies_rows * energies_cols)
+    combineGaborEnergies(
         energies_gpu, np.int32(energies_rows), np.int32(energies_cols),
-        combined_gpu,
+        combined_energies_gpu, combined_phases_gpu,
         block=(CUDA_BLOCK_SIZE, CUDA_BLOCK_SIZE, 1),
         grid=(int(np.ceil(energies_cols / CUDA_BLOCK_SIZE)),
               int(np.ceil(energies_rows / CUDA_BLOCK_SIZE))))
-    combined = np.empty((energies_rows, energies_cols), np.float32)
-    cuda.memcpy_dtoh(combined, combined_gpu)
+
+    combined_energies = np.empty((energies_rows, energies_cols), np.float32)
+    cuda.memcpy_dtoh(combined_energies, combined_energies_gpu)
+
+    combined_phases = np.empty((energies_rows, energies_cols), np.float32)
+    cuda.memcpy_dtoh(combined_phases, combined_phases_gpu)
 
     vanishing_point_pub.publish(  # TODO: Publish real VP
         VanishingPoint(header=color_image_msg.header, row=0, col=0))
 
     if gabor_filter_kernels_pubs is not None:
-        for theta in range(THETA_N):
+        for theta_idx in range(THETA_N):
             kernel = np.empty(
                 (GABOR_FILTER_KERNEL_SIZE, GABOR_FILTER_KERNEL_SIZE),
                 dtype=np.float32)
             cuda.memcpy_dtoh(
                 kernel,
-                gabor_kernels_gpu[theta]
+                gabor_kernels_gpu[theta_idx]
                                  [PUBLISH_GABOR_FILTERS_FREQUENCY_IDX]
                                  [PUBLISH_GABOR_FILTERS_IMAG_PART])
             kernel -= kernel.min()
             kernel /= kernel.max()
             kernel *= 255
-            gabor_filter_kernels_pubs[theta].publish(cv_bridge.cv2_to_imgmsg(
+            gabor_filter_kernels_pubs[theta_idx].publish(cv_bridge.cv2_to_imgmsg(
                 kernel.astype(np.uint8), encoding='8UC1'))
 
     if gabor_energies_pubs is not None:
         energies = np.empty(
             (energies_rows, energies_cols, THETA_N), dtype=np.float32)
         cuda.memcpy_dtoh(energies, energies_gpu)
-        for i in range(THETA_N):
-            energy = energies[:, :, i]
+        for theta_idx in range(THETA_N):
+            energy = energies[:, :, theta_idx]
             energy -= energy.min()
             energy /= energy.max()
             energy *= 255
-            gabor_energies_pubs[i].publish(cv_bridge.cv2_to_imgmsg(
+            gabor_energies_pubs[theta_idx].publish(cv_bridge.cv2_to_imgmsg(
                 energy.astype(np.uint8), encoding='8UC1'))
 
     if gabor_combined_energies_pub is not None:
-        combined -= combined.min()
-        combined /= combined.max()
-        combined *= 255
+        combined_energies -= combined_energies.min()
+        combined_energies /= combined_energies.max()
+        combined_energies *= 255
         gabor_combined_energies_pub.publish(cv_bridge.cv2_to_imgmsg(
-            combined.astype(np.uint8), encoding='8UC1'))
+            combined_energies.astype(np.uint8), encoding='8UC1'))
 
 
 if __name__ == '__main__':
@@ -211,7 +219,7 @@ if __name__ == '__main__':
         '~publish_gabor_filter_frequency_idx', 0)
     PUBLISH_GABOR_ENERGIES = rospy.get_param(
         '~publish_gabor_energies', False)
-    PUBLISH_COMBINED_GABOR_ENERGIES_ = rospy.get_param(
+    PUBLISH_COMBINED_GABOR_ENERGIES = rospy.get_param(
         '~publish_combined_gabor_energies', False)
 
     # Vanishing Point Detection Parameters
@@ -219,15 +227,16 @@ if __name__ == '__main__':
     VP_HORIZON_CANDIDATES_MARGIN = rospy.get_param(
         '~vp_horizon_candidates_margin', 20)
     THETA_N = 4  # Implementation Specific
-    GABOR_FILTER_THETAS = [np.pi / THETA_N * i for i in range(THETA_N)]
+    GABOR_FILTER_THETAS = [
+        np.pi / THETA_N * theta_idx for theta_idx in range(THETA_N)]
     GABOR_FILTER_KERNEL_SIZE = rospy.get_param(
-        '~gabor_filter_kernel_size', 21)  # Should be odd.
+        '~gabor_filter_kernel_size', 25)  # Should be odd.
     assert GABOR_FILTER_KERNEL_SIZE % 2 == 1
     GABOR_FILTER_SIGMA_X = rospy.get_param('~gabor_filter_sigma_x', 4)
     GABOR_FILTER_SIGMA_Y = rospy.get_param('~gabor_filter_sigma_y', 2)
     # Recommendation: Values between 0.1 and 0.5
     GABOR_FILTER_FREQUENCIES = rospy.get_param(
-        '~gabor_filter_frequencies', [0.25, 0.3, 0.35])
+        '~gabor_filter_frequencies', [0.3, 0.35])
     FREQUENCIES_N = len(GABOR_FILTER_FREQUENCIES)
 
     cuda.init()
@@ -239,26 +248,26 @@ if __name__ == '__main__':
     addGaborFilterMagnitudeResponse = mod.get_function(
         'addGaborFilterMagnitudeResponse')
     divideGaborEnergiesTensor = mod.get_function('divideGaborEnergiesTensor')
-    combineFilteredImages = mod.get_function('combineFilteredImages')
+    combineGaborEnergies = mod.get_function('combineGaborEnergies')
 
     cv_bridge = CvBridge()
     vanishing_point_pub = rospy.Publisher(
         'vanishing_point', VanishingPoint, queue_size=1)
     gabor_filter_kernels_pubs = (
-        [rospy.Publisher('gabor_%d_filter_kernel' % (180 / THETA_N * i),
+        [rospy.Publisher('gabor_%d_filter_kernel' % (180 / THETA_N * theta_idx),
                          Image,
                          queue_size=1)
-         for i in range(THETA_N)]
+         for theta_idx in range(THETA_N)]
         if PUBLISH_GABOR_FILTER_KERNELS else None)
     gabor_energies_pubs = (
-        [rospy.Publisher('gabor_%d_energy' % (180 / THETA_N * i),
+        [rospy.Publisher('gabor_%d_energy' % (180 / THETA_N * theta_idx),
                          Image,
                          queue_size=1)
-         for i in range(THETA_N)]
+         for theta_idx in range(THETA_N)]
         if PUBLISH_GABOR_ENERGIES else None)
     gabor_combined_energies_pub = (
         rospy.Publisher('gabor_combined_energies', Image, queue_size=1)
-        if PUBLISH_GABOR_ENERGIES else None)
+        if PUBLISH_COMBINED_GABOR_ENERGIES else None)
 
     color_image_sub = message_filters.Subscriber(
         '/multisense/left/image_rect_color', Image)
@@ -280,4 +289,3 @@ if __name__ == '__main__':
                         gabor_combined_energies_pub)
 
     rospy.spin()
-

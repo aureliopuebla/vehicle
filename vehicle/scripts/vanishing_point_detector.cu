@@ -1,6 +1,6 @@
-#include <math_constants.h>
-
 #define THETA_N 4
+#define SQRT_2 1.4142135623730951f
+#define PI 3.141592653589793f
 
 extern "C" {
 /**
@@ -93,10 +93,18 @@ __global__ void divideGaborEnergiesTensor(float* gabor_energies, int rows, int c
 }
 
 /**
- * Combines the TODO: documment this & improve kernel.
- * @param energies The .
+ * Combines the Gabor Energies Tensor into a Matrix by joining the magnitude response of the different thetas into a
+ * single one with a corresponding combined energy and combined phase (angle). This takes into consideration the two
+ * strongest orientations (thetas) and linearly joining their equivalent plane components. The two weakest components
+ * are subtracted from the strongest ones since random textures tend to equally respond to different Gabor kernels.
+ * @param gabor_energies The Gabor Energies Tensor.
+ * @param rows The number of rows in 'gabor_energies'.
+ * @param cols The number of columns in 'gabor_energies'.
+ * @param combined_energies The resulting magnitude response from combining the Gabor energies at different thetas.
+ * @param combined_phases The resulting phase response from combining the Gabor energies at different thetas.
  */
-__global__ void combineFilteredImages(float* energies, int rows, int cols, float* combined)
+__global__ void combineGaborEnergies(float* gabor_energies, int rows, int cols,
+                                     float* combined_energies, float* combined_phases)
 {
   int image_y = blockDim.y * blockIdx.y + threadIdx.y;
   int image_x = blockDim.x * blockIdx.x + threadIdx.x;
@@ -106,7 +114,7 @@ __global__ void combineFilteredImages(float* energies, int rows, int cols, float
   int descending_energies_arg[THETA_N];
   float temp_energies[THETA_N];
   for (int i = 0; i < THETA_N; i++)
-    temp_energies[i] = energies[THETA_N * offset + i];
+    temp_energies[i] = gabor_energies[THETA_N * offset + i];
   for (int i = 0; i < THETA_N; i++)
   {
     int max_idx = 0;
@@ -120,7 +128,65 @@ __global__ void combineFilteredImages(float* energies, int rows, int cols, float
     descending_energies_arg[i] = max_idx;
     temp_energies[max_idx] = -1.0f;
   }
-  combined[offset] = (energies[THETA_N * offset + descending_energies_arg[0]] -
-                      energies[THETA_N * offset + descending_energies_arg[3]]);
+  float s1 = (gabor_energies[THETA_N * offset + descending_energies_arg[0]] -
+              gabor_energies[THETA_N * offset + descending_energies_arg[3]]);
+  float s2 = (gabor_energies[THETA_N * offset + descending_energies_arg[1]] -
+              gabor_energies[THETA_N * offset + descending_energies_arg[2]]);
+  int theta_idx1 = descending_energies_arg[0];
+  int theta_idx2 = descending_energies_arg[1];
+  float combined_y = 0.0f, combined_x = 0.0f;
+  switch(theta_idx1)
+  {
+    case 0:
+      if (theta_idx2 == 1)
+      {
+        combined_y = s1 + s2 / SQRT_2;
+        combined_x = s2 / SQRT_2;
+      }
+      else if (theta_idx2 == 3)
+      {
+        combined_y = s1 + s2 / SQRT_2;
+        combined_x = -s2 / SQRT_2;
+      }
+      break;
+    case 1:
+      if (theta_idx2 == 0)
+      {
+        combined_y = s1 / SQRT_2 + s2;
+        combined_x = s1 / SQRT_2;
+      }
+      else if (theta_idx2 == 2)
+      {
+        combined_y = s1 / SQRT_2;
+        combined_x = s1 / SQRT_2 + s2;
+      }
+      break;
+    case 2:
+      if (theta_idx2 == 1)
+      {
+        combined_y = s2 / SQRT_2;
+        combined_x = s1 + s2 / SQRT_2;
+      }
+      else if (theta_idx2 == 3)
+      {
+        combined_y = s2 / SQRT_2;
+        combined_x = -s1 - s2 / SQRT_2;
+      }
+      break;
+    case 3:
+      if (theta_idx2 == 0)
+      {
+        combined_y = s1 / SQRT_2 + s2;
+        combined_x = -s1 / SQRT_2;
+      }
+      else if (theta_idx2 == 2)
+      {
+        combined_y = s1 / SQRT_2;
+        combined_x = -s1 / SQRT_2 - s2;
+      }
+      break;
+  }
+  combined_energies[offset] = sqrtf(combined_y * combined_y + combined_x * combined_x);
+  combined_phases[offset] = atan2f(combined_y, combined_x);
 }
 }
