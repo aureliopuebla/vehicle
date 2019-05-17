@@ -113,7 +113,8 @@ def get_vanishing_point_callback(color_image_msg,
                                  vanishing_point_pub,
                                  gabor_filter_kernels_pubs=None,
                                  gabor_energies_pubs=None,
-                                 gabor_combined_energies_pub=None):
+                                 gabor_combined_energies_pub=None,
+                                 vp_candidates_region_pub=None):
     """Publishes the vanishing_point by processing the camera's grey_image,
     exploiting the previously obtained vdisp_line.
 
@@ -132,9 +133,11 @@ def get_vanishing_point_callback(color_image_msg,
           based on the param configuration.
       gabor_energies_pubs: If set, it's an array of ROS Publishers where each
           Publisher matches a theta of the applied Gabor kernels.
-      gabor_combined_energies_pub: If set, a ROS Publisher where the magnitude
-          response after processing the Gabor Energies Tensor into a single
-          combined response per pixel.
+      gabor_combined_energies_pub: If set, it's a ROS Publisher where the
+          magnitude response after processing the Gabor Energies Tensor into a
+          single combined response per pixel.
+      vp_candidates_region_pub: If set, it's a ROS Publisher where the resulting
+          vp_candidates_voting_region after voting will be placed.
     """
     color_image = cv_bridge.imgmsg_to_cv2(
         color_image_msg, desired_encoding='passthrough')
@@ -161,11 +164,19 @@ def get_vanishing_point_callback(color_image_msg,
         grid=(int(np.ceil(energies_cols / CUDA_BLOCK_SIZE)),
               int(np.ceil(energies_rows / CUDA_BLOCK_SIZE))))
 
-    combined_energies = np.empty((energies_rows, energies_cols), np.float32)
-    cuda.memcpy_dtoh(combined_energies, combined_energies_gpu)
-
-    combined_phases = np.empty((energies_rows, energies_cols), np.float32)
-    cuda.memcpy_dtoh(combined_phases, combined_phases_gpu)
+    vp_candidates_gpu = cuda.mem_alloc(np.float32().itemsize *
+                                       (2 * VP_HORIZON_CANDIDATES_MARGIN + 1) *
+                                       energies_cols)
+    cuda.memcpy_htod(  # TEMP
+        vp_candidates_gpu,
+        np.zeros((2 * VP_HORIZON_CANDIDATES_MARGIN + 1, energies_cols), dtype=np.float32))
+    voteForVanishingPointCandidates(
+        combined_energies_gpu, combined_phases_gpu, vp_candidates_gpu,
+        np.int32(energies_rows), np.int32(2 * VP_HORIZON_CANDIDATES_MARGIN + 1),
+        np.int32(energies_cols),
+        block=(CUDA_BLOCK_SIZE, CUDA_BLOCK_SIZE, 1),
+        grid=(int(np.ceil(energies_cols / CUDA_BLOCK_SIZE)),
+              int(np.ceil(energies_rows / CUDA_BLOCK_SIZE))))
 
     vanishing_point_pub.publish(  # TODO: Publish real VP
         VanishingPoint(header=color_image_msg.header, row=0, col=0))
@@ -199,11 +210,25 @@ def get_vanishing_point_callback(color_image_msg,
                 energy.astype(np.uint8), encoding='8UC1'))
 
     if gabor_combined_energies_pub is not None:
+        combined_energies = np.empty((energies_rows, energies_cols),
+                                     dtype=np.float32)
+        cuda.memcpy_dtoh(combined_energies, combined_energies_gpu)
         combined_energies -= combined_energies.min()
         combined_energies /= combined_energies.max()
         combined_energies *= 255
         gabor_combined_energies_pub.publish(cv_bridge.cv2_to_imgmsg(
             combined_energies.astype(np.uint8), encoding='8UC1'))
+
+    if vp_candidates_region_pub is not None:
+        vp_candidates_region = np.empty(
+            (2 * VP_HORIZON_CANDIDATES_MARGIN + 1, energies_cols),
+            dtype=np.float32)
+        cuda.memcpy_dtoh(vp_candidates_region, vp_candidates_gpu)
+        vp_candidates_region -= vp_candidates_region.min()
+        vp_candidates_region /= vp_candidates_region.max()
+        vp_candidates_region *= 255
+        vp_candidates_region_pub.publish(cv_bridge.cv2_to_imgmsg(
+            vp_candidates_region.astype(np.uint8), encoding='8UC1'))
 
 
 if __name__ == '__main__':
@@ -221,6 +246,8 @@ if __name__ == '__main__':
         '~publish_gabor_energies', False)
     PUBLISH_COMBINED_GABOR_ENERGIES = rospy.get_param(
         '~publish_combined_gabor_energies', False)
+    PUBLISH_VP_CANDIDATES_VOTING_REGION = rospy.get_param(
+        '~publish_vp_candidates_voting_region', False)
 
     # Vanishing Point Detection Parameters
     CUDA_BLOCK_SIZE = rospy.get_param('~cuda_block_size', 16)
@@ -249,6 +276,8 @@ if __name__ == '__main__':
         'addGaborFilterMagnitudeResponse')
     divideGaborEnergiesTensor = mod.get_function('divideGaborEnergiesTensor')
     combineGaborEnergies = mod.get_function('combineGaborEnergies')
+    voteForVanishingPointCandidates = mod.get_function(
+        'voteForVanishingPointCandidates')
 
     cv_bridge = CvBridge()
     vanishing_point_pub = rospy.Publisher(
@@ -268,6 +297,9 @@ if __name__ == '__main__':
     gabor_combined_energies_pub = (
         rospy.Publisher('gabor_combined_energies', Image, queue_size=1)
         if PUBLISH_COMBINED_GABOR_ENERGIES else None)
+    vp_candidates_region_pub = (
+        rospy.Publisher('vp_candidates_region', Image, queue_size=1)
+        if PUBLISH_VP_CANDIDATES_VOTING_REGION else None)
 
     color_image_sub = message_filters.Subscriber(
         '/multisense/left/image_rect_color', Image)
@@ -286,6 +318,7 @@ if __name__ == '__main__':
                         vanishing_point_pub,
                         gabor_filter_kernels_pubs,
                         gabor_energies_pubs,
-                        gabor_combined_energies_pub)
+                        gabor_combined_energies_pub,
+                        vp_candidates_region_pub)
 
     rospy.spin()

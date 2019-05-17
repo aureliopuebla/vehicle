@@ -189,4 +189,38 @@ __global__ void combineGaborEnergies(float* gabor_energies, int rows, int cols,
   combined_energies[offset] = sqrtf(combined_y * combined_y + combined_x * combined_x);
   combined_phases[offset] = atan2f(combined_y, combined_x);
 }
+
+/**
+ * Generates votes for all of the Vanishing Point candidates by allowing all of the voting region to assign a voting
+ * weight for their preferred candidates. The candidate region is assumed to be directly above the voting region
+ * (combined components) such that concatenated are part of a continuous region of the original image.
+ * @param combined_energies The resulting magnitude response from combining the Gabor energies at different thetas.
+ * @param combined_phases The resulting phase response from combining the Gabor energies at different thetas.
+ * @param candidates The Vanishing Point candidates, being a region directly above the voting region which should also
+ *                   correspond to a stripe around the horizon line.
+ * @param voters_rows The number of rows in both 'combined_energies' and 'combined_phases'.
+ * @param candidates_rows The number of rows in 'candidates'.
+ * @param cols The number of columns in all three: 'combined_energies', 'combined_phases', and 'candidates'.
+ */
+__global__ void voteForVanishingPointCandidates(float* combined_energies, float* combined_phases, float* candidates,
+                                                int voters_rows, int candidates_rows, int cols)
+{
+  int image_y = blockDim.y * blockIdx.y + threadIdx.y;
+  int image_x = blockDim.x * blockIdx.x + threadIdx.x;
+  if (image_y >= voters_rows || image_x >= cols)
+    return;  // Out of image.
+  int energies_offset = image_y * cols + image_x;
+  int candidates_y_offset = candidates_rows * cols;
+  float energy = combined_energies[energies_offset];
+  float phase = combined_phases[energies_offset];
+  float cot = 1.0f / tanf(phase);
+  for (int candidates_y = candidates_rows - 1; candidates_y >= 0; candidates_y--)
+  {
+    candidates_y_offset -= cols;
+    int y_delta = image_y + candidates_rows - candidates_y;
+    int candidates_x = image_x + cot * y_delta;
+    if (candidates_x >= 0 && candidates_x < cols)
+      atomicAdd(&candidates[candidates_y_offset + candidates_x], energy);
+  }
+}
 }

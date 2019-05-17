@@ -22,6 +22,7 @@
         <param name="publish_gabor_filter_kernels" type="bool" value="False"/>
         <param name="publish_gabor_energies" type="bool" value="False"/>
         <param name="publish_combined_gabor_energies" type="bool" value="True"/>
+        <param name="publish_vp_candidates_voting_region" type="bool" value="True"/>
     </node>
 
   <!-- <node pkg="vehicle" type="cocoDetection.py" name="cocoDetection_node"
