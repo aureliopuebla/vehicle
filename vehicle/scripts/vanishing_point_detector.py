@@ -104,7 +104,9 @@ def get_vanishing_point_callback(color_image_msg,
                                  cuda_context,
                                  gabor_kernels_gpu,
                                  vanishing_point_pub,
-                                 gabor_filtered_images_pubs=None):
+                                 gabor_filter_kernels_pubs=None,
+                                 gabor_energies_pubs=None,
+                                 gabor_combined_energies_pub=None):
     """Publishes the vanishing_point by processing the camera's grey_image,
     exploiting the previously obtained vdisp_line.
 
@@ -116,8 +118,16 @@ def get_vanishing_point_callback(color_image_msg,
           Messages.
       cuda_context: The CUDA context to be used to execute kernels.
       vanishing_point_pub: The ROS Publisher for the vanishing_point.
-      gabor_filtered_images_pubs: If set, it's an array of ROS Publishers
-          where each Publisher matches a theta of the applied Gabor kernels.
+      gabor_filter_kernels_pubs: If set, it's an array of ROS Publishers where
+          each Publisher matches a theta of the Gabor Kernels. The corresponding
+          kernel will be published taking into consideration whether the real
+          or imaginary parts are desired and which frequency is to be published
+          based on the param configuration.
+      gabor_energies_pubs: If set, it's an array of ROS Publishers where each
+          Publisher matches a theta of the applied Gabor kernels.
+      gabor_combined_energies_pub: If set, a ROS Publisher where the magnitude
+          response after processing the Gabor Energies Tensor into a single
+          combined response per pixel.
     """
     color_image = cv_bridge.imgmsg_to_cv2(
         color_image_msg, desired_encoding='passthrough')
@@ -145,24 +155,40 @@ def get_vanishing_point_callback(color_image_msg,
     vanishing_point_pub.publish(  # TODO: Publish real VP
         VanishingPoint(header=color_image_msg.header, row=0, col=0))
 
-    if gabor_filtered_images_pubs is not None:
+    if gabor_filter_kernels_pubs is not None:
+        for theta in range(THETA_N):
+            kernel = np.empty(
+                (GABOR_FILTER_KERNEL_SIZE, GABOR_FILTER_KERNEL_SIZE),
+                dtype=np.float32)
+            cuda.memcpy_dtoh(
+                kernel,
+                gabor_kernels_gpu[theta]
+                                 [PUBLISH_GABOR_FILTERS_FREQUENCY_IDX]
+                                 [PUBLISH_GABOR_FILTERS_IMAG_PART])
+            kernel -= kernel.min()
+            kernel /= kernel.max()
+            kernel *= 255
+            gabor_filter_kernels_pubs[theta].publish(cv_bridge.cv2_to_imgmsg(
+                kernel.astype(np.uint8), encoding='8UC1'))
+
+    if gabor_energies_pubs is not None:
+        energies = np.empty(
+            (energies_rows, energies_cols, THETA_N), dtype=np.float32)
+        cuda.memcpy_dtoh(energies, energies_gpu)
         for i in range(THETA_N):
-            #kernel = gabor_kernels[i][0][0].copy()
-            #kernel -= kernel.min()
-            #kernel /= kernel.max()
-            #kernel *= 255
-            #energy = energies[:, :, i]
-            #energy -= energy.min()
-            #energy /= energy.max()
-            #energy *= 255
-            combined -= combined.min()
-            combined /= combined.max()
-            combined *= 255
-            gabor_filtered_images_pubs[i].publish(cv_bridge.cv2_to_imgmsg(
-                #kernel.astype('uint8'),
-                combined.astype('uint8'),
-                #energy.astype('uint8'),
-                encoding='8UC1'))
+            energy = energies[:, :, i]
+            energy -= energy.min()
+            energy /= energy.max()
+            energy *= 255
+            gabor_energies_pubs[i].publish(cv_bridge.cv2_to_imgmsg(
+                energy.astype(np.uint8), encoding='8UC1'))
+
+    if gabor_combined_energies_pub is not None:
+        combined -= combined.min()
+        combined /= combined.max()
+        combined *= 255
+        gabor_combined_energies_pub.publish(cv_bridge.cv2_to_imgmsg(
+            combined.astype(np.uint8), encoding='8UC1'))
 
 
 if __name__ == '__main__':
@@ -170,8 +196,16 @@ if __name__ == '__main__':
 
     # The following publications are for debugging and visualization only as
     # they severely slow down node execution.
-    PUBLISH_GABOR_FILTERED_IMAGES = rospy.get_param(
-        '~publish_gabor_filtered_images', False)
+    PUBLISH_GABOR_FILTER_KERNELS = rospy.get_param(
+        '~publish_gabor_filter_kernels', False)
+    PUBLISH_GABOR_FILTERS_IMAG_PART = rospy.get_param(
+        '~publish_gabor_filter_imag_part', True)
+    PUBLISH_GABOR_FILTERS_FREQUENCY_IDX = rospy.get_param(
+        '~publish_gabor_filter_frequency_idx', 0)
+    PUBLISH_GABOR_ENERGIES = rospy.get_param(
+        '~publish_gabor_energies', False)
+    PUBLISH_COMBINED_GABOR_ENERGIES_ = rospy.get_param(
+        '~publish_combined_gabor_energies', False)
 
     # Vanishing Point Detection Parameters
     CUDA_BLOCK_SIZE = rospy.get_param('~cuda_block_size', 16)
@@ -203,12 +237,21 @@ if __name__ == '__main__':
     cv_bridge = CvBridge()
     vanishing_point_pub = rospy.Publisher(
         'vanishing_point', VanishingPoint, queue_size=1)
-    gabor_filtered_images_pubs = (
-        [rospy.Publisher('gabor_%d_filtered_image' % (180 / THETA_N * i),
+    gabor_filter_kernels_pubs = (
+        [rospy.Publisher('gabor_%d_filter_kernel' % (180 / THETA_N * i),
                          Image,
                          queue_size=1)
          for i in range(THETA_N)]
-        if PUBLISH_GABOR_FILTERED_IMAGES else None)
+        if PUBLISH_GABOR_FILTER_KERNELS else None)
+    gabor_energies_pubs = (
+        [rospy.Publisher('gabor_%d_energy' % (180 / THETA_N * i),
+                         Image,
+                         queue_size=1)
+         for i in range(THETA_N)]
+        if PUBLISH_GABOR_ENERGIES else None)
+    gabor_combined_energies_pub = (
+        rospy.Publisher('gabor_combined_energies', Image, queue_size=1)
+        if PUBLISH_GABOR_ENERGIES else None)
 
     color_image_sub = message_filters.Subscriber(
         '/multisense/left/image_rect_color', Image)
@@ -225,7 +268,9 @@ if __name__ == '__main__':
                                                  GABOR_FILTER_SIGMA_Y,
                                                  GABOR_FILTER_KERNEL_SIZE),
                         vanishing_point_pub,
-                        gabor_filtered_images_pubs)
+                        gabor_filter_kernels_pubs,
+                        gabor_energies_pubs,
+                        gabor_combined_energies_pub)
 
     rospy.spin()
 
