@@ -62,6 +62,13 @@ def get_gabor_filter_kernels(thetas, frequencies, sigma_x, sigma_y, size):
 
 
 def apply_gabor_kernels(grey_image, gabor_kernels_gpu):
+    """Applies all the bank of complex Gabor Kernels to calculate the Gabor
+       Energies Tensor. The Gabor Energy Tensor contains at position
+       [y, x, theta] the average over all frequencies for the magnitude response
+       of convolutions at a given (x, y) pixel for a given theta. Note that the
+       number of rows and columns in the Gabor Energies Tensor is
+       (image_rows - (kernel_size >> 1)) X (image_cols - (kernel_size >> 1)) due
+       to the padding lost at convolution."""
     original_rows, original_cols = grey_image.shape
     energies_rows = original_rows - GABOR_FILTER_KERNEL_SIZE + 1
     energies_cols = original_cols - GABOR_FILTER_KERNEL_SIZE + 1
