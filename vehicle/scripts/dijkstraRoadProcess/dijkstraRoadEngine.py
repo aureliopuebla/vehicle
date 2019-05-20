@@ -254,6 +254,8 @@ def dijkstraRoadDetectionCallback(color_image_msg,
 
     rospy.logdebug("imshowing vis")
     cv2.imshow("preview", visualizationFrame)
+    cv2.imshow("costs sum", weightedSumMatrix)
+
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
