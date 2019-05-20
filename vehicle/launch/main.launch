@@ -3,7 +3,7 @@
 
 
     <node pkg="rosbag" type="play" name="play_node" output="log"
-        args="--clock -l '/media/aurelio/Data/TEC Recordings/TEC_2019-04-03-17-35-59.bag'"/>
+        args="--clock -l '/home/emilio/Desktop/TEC_2019-04-03-17-35-59.bag'"/>
 
     <node pkg="rqt_gui" type="rqt_gui" name="rqt_gui_node"/>
 
