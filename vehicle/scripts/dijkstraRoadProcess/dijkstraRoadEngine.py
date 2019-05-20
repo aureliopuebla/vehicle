@@ -36,17 +36,21 @@ CAMERA_FRAME = "image_02/data/" + IMG_NAME
 
 
 
-def getVanishingPoint(gray_image=[]):
+def getVanishingPoint(gray_image):
     # print gray_image
-    # print "waiting for user input"
-    # cv2.imshow('grab_vp', gray_image)
-    # cv2.waitKey(0)
-
+    print "waiting for user input"
+    cv2.imshow('grab_vp', gray_image)
+    cv2.waitKey(0)
     # return mocked_vp_x, mocked_vp_y
-    vanish_X = 520
-    vanish_Y = 290
+    vanish_X = input('enter coord X of VP :')
+    vanish_Y = input('ente coord Y of VP :')
+    
+    cv2.destroyWindow('grab_vp')
     return (vanish_X, vanish_Y)
 
+##############
+# Depreciated
+#############
 def getFittedLineParams():
     k = 100
     b = 50
@@ -63,7 +67,9 @@ def retrieveFrames():
 def processDijkstraCosts(depth_frame, 
                          camera_frame,
                          vdisp_k,
-                         vdisp_m, 
+                         vdisp_m,
+                         vp_x, 
+                         vp_y,
                          printCosts=False):
     """
     Computes 5 costs of the Dijkstra Road Detection.
@@ -71,9 +77,7 @@ def processDijkstraCosts(depth_frame,
 
     # compute imagate derivatives x, y
     sobel_x, sobel_y = computeSobelDerivatives(camera_frame)
-    # retriving vanishing point coordenates
-    vp_x, vp_y = getVanishingPoint()
-
+    
     # GRADIENT COST
     gradientsCostMatrix = computeGradientCost(gx=sobel_x, gy=sobel_y)  
 
@@ -125,8 +129,7 @@ def displayCostImages(
     OrientationLinkCost,
     FlatnessCost,
     DisparityFeatureCost,
-    GradientDirectionCost
-):
+    GradientDirectionCost):
     """
     Helper Function to display the 5 Matrix costs
     """
@@ -211,6 +214,8 @@ def dijkstraRoadDetectionCallback(color_image_msg,
                         t_camera_frame,
                         vdisp_k=vdisp_k,
                         vdisp_m=vdisp_m,
+                        vp_x=vp_x,
+                        vp_y=vp_y,
                         printCosts=False)
 
     # make sure no overflows on 8bit image
